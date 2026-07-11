@@ -104,13 +104,32 @@ MEMC:
 
 ## Home Assistant Custom Integration
 
+### Installation mit HACS
+
+1. HACS öffnen.
+2. **Custom repositories** öffnen.
+3. Repository hinzufügen:
+
+   ```text
+   https://github.com/dr-apple/XgimiControlBridge
+   ```
+
+4. Kategorie **Integration** auswählen.
+5. **XGIMI Control Bridge** installieren.
+6. Home Assistant neu starten.
+7. In Home Assistant **Einstellungen > Geräte & Dienste > Integration hinzufügen**
+   öffnen und **XGIMI Control Bridge** auswählen.
+8. Die bestehende Android-TV-/ADB-`media_player`-Entity des Projektors auswählen.
+
+### Manuelle Installation
+
 Dieses Repository enthält zusätzlich eine Custom Integration unter:
 
 ```text
 custom_components/xgimi_control_bridge
 ```
 
-Installation:
+Manuelle Installation:
 
 1. Den Ordner `custom_components/xgimi_control_bridge` nach Home Assistant in
    `/config/custom_components/xgimi_control_bridge` kopieren.

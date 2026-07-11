@@ -1,9 +1,11 @@
 {
   "domain": "xgimi_control_bridge",
   "name": "XGIMI Control Bridge",
-  "codeowners": [],
+  "codeowners": ["@dr-apple"],
   "config_flow": true,
-  "documentation": "https://github.com/drapple/XgimiControlBridge",
+  "documentation": "https://github.com/dr-apple/XgimiControlBridge",
+  "integration_type": "device",
   "iot_class": "local_push",
+  "issue_tracker": "https://github.com/dr-apple/XgimiControlBridge/issues",
   "version": "0.1.0"
 }
