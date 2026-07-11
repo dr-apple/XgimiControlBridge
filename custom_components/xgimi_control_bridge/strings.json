@@ -1,0 +1,26 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "XGIMI Control Bridge",
+        "description": "Choose the Android TV / ADB media player entity for your XGIMI projector.",
+        "data": {
+          "media_player_entity_id": "Projector media player"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "This media player is already configured."
+    }
+  },
+  "entity": {
+    "select": {
+      "picture_mode": {
+        "name": "Picture mode"
+      },
+      "memc": {
+        "name": "MEMC"
+      }
+    }
+  }
+}
