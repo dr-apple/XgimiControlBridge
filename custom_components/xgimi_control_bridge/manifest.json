@@ -1,0 +1,9 @@
+{
+  "domain": "xgimi_control_bridge",
+  "name": "XGIMI Control Bridge",
+  "codeowners": [],
+  "config_flow": true,
+  "documentation": "https://github.com/drapple/XgimiControlBridge",
+  "iot_class": "local_push",
+  "version": "0.1.0"
+}

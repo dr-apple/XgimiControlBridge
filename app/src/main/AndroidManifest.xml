@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application
+        android:allowBackup="false"
+        android:label="XGIMI Control Bridge"
+        android:supportsRtl="true">
+
+        <!-- Makes the vendor API visible to this app on XGIMI firmware. -->
+        <uses-library
+            android:name="com.xgimi.api"
+            android:required="true" />
+
+        <receiver
+            android:name=".XgimiCommandReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="de.drapple.xgimi.SET_PICTURE_MODE" />
+                <action android:name="de.drapple.xgimi.SET_MEMC" />
+                <action android:name="de.drapple.xgimi.GET_STATUS" />
+            </intent-filter>
+        </receiver>
+
+    </application>
+</manifest>

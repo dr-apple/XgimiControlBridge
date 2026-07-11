@@ -1,0 +1,82 @@
+set_picture_mode:
+  name: Set picture mode
+  description: Set the XGIMI picture mode through the installed Android bridge APK.
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          domain: media_player
+    mode:
+      selector:
+        select:
+          options:
+            - bright
+            - standard
+            - soft
+            - user
+            - game
+            - auto
+            - pc
+            - movie
+            - natural
+            - sports
+    value:
+      selector:
+        number:
+          min: 0
+          max: 99
+          mode: box
+    source:
+      selector:
+        number:
+          min: 0
+          max: 99
+          mode: box
+
+set_memc:
+  name: Set MEMC
+  description: Set the XGIMI MEMC level through the installed Android bridge APK.
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          domain: media_player
+    level:
+      selector:
+        select:
+          options:
+            - off
+            - low
+            - middle
+            - high
+            - bypass
+    value:
+      selector:
+        number:
+          min: 0
+          max: 99
+          mode: box
+    source:
+      selector:
+        number:
+          min: 0
+          max: 99
+          mode: box
+
+get_status:
+  name: Get status
+  description: Ask the Android bridge APK to log the current XGIMI picture mode and MEMC state.
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          domain: media_player
+    source:
+      selector:
+        number:
+          min: 0
+          max: 99
+          mode: box
