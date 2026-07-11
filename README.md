@@ -157,8 +157,9 @@ Beispiel Service-Aufruf:
 
 ```yaml
 action: xgimi_control_bridge.set_picture_mode
-data:
+target:
   entity_id: media_player.xgimi_h20
+data:
   mode: movie
 ```
 
@@ -166,8 +167,9 @@ MEMC:
 
 ```yaml
 action: xgimi_control_bridge.set_memc
-data:
+target:
   entity_id: media_player.xgimi_h20
+data:
   level: high
 ```
 

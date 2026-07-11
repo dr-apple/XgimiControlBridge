@@ -33,7 +33,7 @@ ATTR_VALUE = "value"
 
 SET_PICTURE_MODE_SCHEMA = vol.Schema(
     {
-        vol.Required(ATTR_ENTITY_ID): cv.entity_id,
+        vol.Optional(ATTR_ENTITY_ID): cv.entity_ids,
         vol.Optional(ATTR_MODE): vol.In(PICTURE_MODES),
         vol.Optional(ATTR_VALUE): vol.Coerce(int),
         vol.Optional(CONF_SOURCE): vol.Coerce(int),
@@ -43,7 +43,7 @@ SET_PICTURE_MODE_SCHEMA = vol.Schema(
 
 SET_MEMC_SCHEMA = vol.Schema(
     {
-        vol.Required(ATTR_ENTITY_ID): cv.entity_id,
+        vol.Optional(ATTR_ENTITY_ID): cv.entity_ids,
         vol.Optional(ATTR_LEVEL): vol.In(MEMC_LEVELS),
         vol.Optional(ATTR_VALUE): vol.Coerce(int),
         vol.Optional(CONF_SOURCE): vol.Coerce(int),
@@ -53,7 +53,7 @@ SET_MEMC_SCHEMA = vol.Schema(
 
 GET_STATUS_SCHEMA = vol.Schema(
     {
-        vol.Required(ATTR_ENTITY_ID): cv.entity_id,
+        vol.Optional(ATTR_ENTITY_ID): cv.entity_ids,
         vol.Optional(CONF_SOURCE): vol.Coerce(int),
     },
     extra=vol.PREVENT_EXTRA,
@@ -87,35 +87,38 @@ def _async_register_services(hass: HomeAssistant) -> None:
         if ATTR_MODE not in call.data and ATTR_VALUE not in call.data:
             raise HomeAssistantError("Either mode or value is required")
 
-        await async_send_bridge_command(
-            hass,
-            call.data[ATTR_ENTITY_ID],
-            ACTION_SET_PICTURE_MODE,
-            mode=call.data.get(ATTR_MODE),
-            value=call.data.get(ATTR_VALUE),
-            source=call.data.get(CONF_SOURCE),
-        )
+        for entity_id in _entity_ids_from_call(call):
+            await async_send_bridge_command(
+                hass,
+                entity_id,
+                ACTION_SET_PICTURE_MODE,
+                mode=call.data.get(ATTR_MODE),
+                value=call.data.get(ATTR_VALUE),
+                source=call.data.get(CONF_SOURCE),
+            )
 
     async def set_memc(call: ServiceCall) -> None:
         if ATTR_LEVEL not in call.data and ATTR_VALUE not in call.data:
             raise HomeAssistantError("Either level or value is required")
 
-        await async_send_bridge_command(
-            hass,
-            call.data[ATTR_ENTITY_ID],
-            ACTION_SET_MEMC,
-            level=call.data.get(ATTR_LEVEL),
-            value=call.data.get(ATTR_VALUE),
-            source=call.data.get(CONF_SOURCE),
-        )
+        for entity_id in _entity_ids_from_call(call):
+            await async_send_bridge_command(
+                hass,
+                entity_id,
+                ACTION_SET_MEMC,
+                level=call.data.get(ATTR_LEVEL),
+                value=call.data.get(ATTR_VALUE),
+                source=call.data.get(CONF_SOURCE),
+            )
 
     async def get_status(call: ServiceCall) -> None:
-        await async_send_bridge_command(
-            hass,
-            call.data[ATTR_ENTITY_ID],
-            ACTION_GET_STATUS,
-            source=call.data.get(CONF_SOURCE),
-        )
+        for entity_id in _entity_ids_from_call(call):
+            await async_send_bridge_command(
+                hass,
+                entity_id,
+                ACTION_GET_STATUS,
+                source=call.data.get(CONF_SOURCE),
+            )
 
     hass.services.async_register(
         DOMAIN,
@@ -135,6 +138,16 @@ def _async_register_services(hass: HomeAssistant) -> None:
         get_status,
         schema=GET_STATUS_SCHEMA,
     )
+
+
+def _entity_ids_from_call(call: ServiceCall) -> list[str]:
+    """Return entity ids from service data or target."""
+    entity_ids = call.data.get(ATTR_ENTITY_ID) or call.target.get(ATTR_ENTITY_ID)
+    if entity_ids is None:
+        raise HomeAssistantError("A media_player target or entity_id is required")
+    if isinstance(entity_ids, str):
+        return [entity_ids]
+    return list(entity_ids)
 
 
 async def async_send_bridge_command(
