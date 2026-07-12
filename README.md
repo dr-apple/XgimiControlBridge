@@ -3,6 +3,44 @@
 Kleine Android-App für XGIMI H20 / Android 14. Sie nimmt ADB-Broadcasts entgegen
 und ruft über Reflection die private XGIMI-API `GmTvManager` auf.
 
+## Reverse Engineering Status
+
+Dieses Projekt wird jetzt zusätzlich als Reverse-Engineering-Repo für native
+XGIMI-H20-Steuerung geführt. Ziel ist eine Home-Assistant-Integration ohne
+DPAD-/Menü-Automatisierung.
+
+Neue Struktur:
+
+```text
+apks/          lokale, ignorierte APK-Inputs
+framework/     lokale, ignorierte Framework-/DEX-Inputs
+libs/          lokale, ignorierte native Libraries
+binder/        Binder-Service-Notizen
+docs/          Analyseplan und Native-API-Map
+scripts/       reproduzierbare Scan- und ADB-Testwerkzeuge
+findings.md    fortlaufende Erkenntnisse
+homeassistant/ Zielbild für die native HA-Integration
+```
+
+Wichtig: Firmware-APKs, Framework-JARs und `.so`-Dateien werden absichtlich nicht
+ins öffentliche Git-Repo aufgenommen. Sie bleiben lokal und werden von den Skripten
+analysiert.
+
+Bestätigt ist bisher der native Autofokus-Aufruf:
+
+```bash
+adb shell service call xgimi.hardware.gmpf.IProjectorFocusManager/default 3 i32 2
+```
+
+Die bisherigen Picture-/MEMC-Aufrufe über `GmTvManager` erreichen zwar die App,
+ändern aber den sichtbaren HDR10-Bildmodus nicht zuverlässig. Der aktuell stärkste
+Lead für HDR Picture Mode, MEMC, Color Temperature, Gamma, Brightness und AI Picture
+ist daher die MediaTek-PQ-Pipeline:
+
+```text
+Settings -> PqModeManager -> JNI -> vendor.mediatek.hardware.pq-impl.so -> GM_DISP_SCENE_V3
+```
+
 ## Bauen
 
 Projekt in Android Studio öffnen und **Build > Build APK(s)** wählen.
