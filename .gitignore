@@ -9,3 +9,16 @@ app/build/
 .DS_Store
 __pycache__/
 *.py[cod]
+
+# Local reverse-engineering inputs extracted from device firmware.
+# Keep these out of the public repository unless you have explicit rights to redistribute them.
+apks/*
+framework/*
+libs/*
+!apks/README.md
+!framework/README.md
+!libs/README.md
+*.dump
+*.dex
+*.oat
+*.vdex
