@@ -145,6 +145,23 @@ select.xgimi_control_bridge_picture_mode
 select.xgimi_control_bridge_memc
 ```
 
+Zusätzlich gibt es Status-Sensoren und einen Button zum manuellen Aktualisieren:
+
+```text
+button.xgimi_control_bridge_refresh_status
+sensor.xgimi_control_bridge_picture_mode
+sensor.xgimi_control_bridge_memc
+sensor.xgimi_control_bridge_source
+sensor.xgimi_control_bridge_last_command_ok
+sensor.xgimi_control_bridge_last_adb_response
+```
+
+Der Status wird aus dem `adb_response`-Attribut der Android-TV-ADB-Entity gelesen.
+Wenn Steuerung oder Status nicht funktionieren, zuerst den Button **Refresh Status**
+drücken und danach `sensor.xgimi_control_bridge_last_adb_response` prüfen. Dort steht
+die rohe Antwort von `am broadcast`, inklusive möglicher Java-/Reflection-Fehler aus
+der Android-Bridge.
+
 Außerdem stehen Services zur Verfügung:
 
 ```text
