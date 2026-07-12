@@ -5,15 +5,23 @@ from __future__ import annotations
 from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from . import async_send_bridge_command, config_entry_media_player_entity_id
+from . import (
+    async_send_bridge_command,
+    config_entry_media_player_entity_id,
+    config_entry_runtime_data,
+)
 from .const import (
     ACTION_SET_MEMC,
     ACTION_SET_PICTURE_MODE,
+    ATTR_MEMC,
+    ATTR_PICTURE_MODE,
     DOMAIN,
     MEMC_LEVELS,
     PICTURE_MODES,
+    SIGNAL_STATUS_UPDATED,
 )
 
 
@@ -68,11 +76,23 @@ class XgimiBridgeSelect(SelectEntity):
         self._media_player_entity_id = media_player_entity_id
         self._action = action
         self._extra_name = extra_name
+        self._status_key = key
         self._attr_unique_id = f"{entry.entry_id}_{key}"
         self._attr_translation_key = key
         self._attr_name = name
         self._attr_options = options
         self._attr_current_option = None
+
+    async def async_added_to_hass(self) -> None:
+        """Register for status updates."""
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                f"{SIGNAL_STATUS_UPDATED}_{self._entry.entry_id}",
+                self._handle_status_update,
+            )
+        )
+        self._handle_status_update()
 
     @property
     def device_info(self):
@@ -94,4 +114,15 @@ class XgimiBridgeSelect(SelectEntity):
             **kwargs,
         )
         self._attr_current_option = option
+        self.async_write_ha_state()
+
+    def _handle_status_update(self) -> None:
+        """Update the current option from stored status."""
+        status = config_entry_runtime_data(self.hass, self._entry).get("status", {})
+        status_key = (
+            ATTR_PICTURE_MODE if self._status_key == "picture_mode" else ATTR_MEMC
+        )
+        option = status.get(status_key)
+        if option in self.options:
+            self._attr_current_option = option
         self.async_write_ha_state()

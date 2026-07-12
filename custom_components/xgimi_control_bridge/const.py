@@ -6,6 +6,13 @@ DOMAIN = "xgimi_control_bridge"
 
 CONF_MEDIA_PLAYER_ENTITY_ID = "media_player_entity_id"
 
+ATTR_ADB_RESPONSE = "adb_response"
+ATTR_LAST_RESPONSE = "last_response"
+ATTR_MEMC = "memc"
+ATTR_OK = "ok"
+ATTR_PICTURE_MODE = "picture_mode"
+ATTR_SOURCE = "source"
+
 ANDROIDTV_DOMAIN = "androidtv"
 ADB_COMMAND_SERVICE = "adb_command"
 
@@ -34,3 +41,8 @@ MEMC_LEVELS = [
     "high",
     "bypass",
 ]
+
+PICTURE_MODE_BY_VALUE = dict(enumerate(PICTURE_MODES))
+MEMC_LEVEL_BY_VALUE = dict(enumerate(MEMC_LEVELS))
+
+SIGNAL_STATUS_UPDATED = f"{DOMAIN}_status_updated"

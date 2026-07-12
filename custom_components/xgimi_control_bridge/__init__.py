@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+import logging
+import re
 import shlex
 
 import voluptuous as vol
@@ -18,18 +21,34 @@ from .const import (
     ACTION_SET_PICTURE_MODE,
     ADB_COMMAND_SERVICE,
     ANDROIDTV_DOMAIN,
+    ATTR_ADB_RESPONSE,
+    ATTR_LAST_RESPONSE,
+    ATTR_MEMC,
+    ATTR_OK,
+    ATTR_PICTURE_MODE,
+    ATTR_SOURCE,
     BRIDGE_COMPONENT,
     CONF_MEDIA_PLAYER_ENTITY_ID,
     DOMAIN,
+    MEMC_LEVEL_BY_VALUE,
     MEMC_LEVELS,
+    PICTURE_MODE_BY_VALUE,
     PICTURE_MODES,
+    SIGNAL_STATUS_UPDATED,
 )
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 
-PLATFORMS: list[Platform] = [Platform.SELECT]
+_LOGGER = logging.getLogger(__name__)
+
+PLATFORMS: list[Platform] = [Platform.BUTTON, Platform.SELECT, Platform.SENSOR]
 
 ATTR_LEVEL = "level"
 ATTR_MODE = "mode"
 ATTR_VALUE = "value"
+
+_BROADCAST_DATA_RE = re.compile(
+    r'data=(?P<quote>["\'])(?P<data>.*)(?P=quote)', re.DOTALL
+)
 
 SET_PICTURE_MODE_SCHEMA = vol.Schema(
     {
@@ -63,7 +82,11 @@ GET_STATUS_SCHEMA = vol.Schema(
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up XGIMI Control Bridge from a config entry."""
     hass.data.setdefault(DOMAIN, {})
-    hass.data[DOMAIN][entry.entry_id] = entry.data
+    hass.data[DOMAIN][entry.entry_id] = {
+        "data": entry.data,
+        "last_response": None,
+        "status": {},
+    }
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     _async_register_services(hass)
@@ -161,6 +184,7 @@ async def async_send_bridge_command(
     source: int | None = None,
 ) -> None:
     """Send a broadcast command to the installed Android bridge APK."""
+    previous_response = _adb_response_from_entity(hass, entity_id)
     command = _build_broadcast_command(
         action,
         mode=mode,
@@ -175,6 +199,28 @@ async def async_send_bridge_command(
         {"command": command},
         blocking=True,
         target={ATTR_ENTITY_ID: entity_id},
+    )
+
+    raw_response = _adb_response_from_entity(hass, entity_id)
+    parsed_response = _parse_broadcast_response(raw_response)
+
+    if raw_response == previous_response and action == ACTION_GET_STATUS:
+        _LOGGER.debug(
+            "ADB response for %s did not change after status command: %s",
+            entity_id,
+            raw_response,
+        )
+
+    _update_matching_entries(
+        hass,
+        entity_id,
+        action,
+        raw_response,
+        parsed_response,
+        mode=mode,
+        level=level,
+        value=value,
+        source=source,
     )
 
 
@@ -208,6 +254,111 @@ def _build_broadcast_command(
     return " ".join(shlex.quote(part) for part in parts)
 
 
+def _adb_response_from_entity(hass: HomeAssistant, entity_id: str) -> str | None:
+    """Return the latest Android TV ADB response attribute for an entity."""
+    state = hass.states.get(entity_id)
+    if state is None:
+        return None
+    response = state.attributes.get(ATTR_ADB_RESPONSE)
+    return response if isinstance(response, str) else None
+
+
+def _parse_broadcast_response(raw_response: str | None) -> dict | None:
+    """Parse the JSON payload returned by am broadcast."""
+    if not raw_response:
+        return None
+
+    stripped = raw_response.strip()
+    if stripped.startswith("{"):
+        try:
+            return json.loads(stripped)
+        except json.JSONDecodeError:
+            pass
+
+    match = _BROADCAST_DATA_RE.search(stripped)
+    if match is None:
+        return None
+
+    data = match.group("data").replace(r"\"", '"')
+    try:
+        return json.loads(data)
+    except json.JSONDecodeError:
+        _LOGGER.debug("Could not parse XGIMI broadcast data payload: %s", data)
+        return None
+
+
+def _update_matching_entries(
+    hass: HomeAssistant,
+    entity_id: str,
+    action: str,
+    raw_response: str | None,
+    parsed_response: dict | None,
+    *,
+    mode: str | None,
+    level: str | None,
+    value: int | None,
+    source: int | None,
+) -> None:
+    """Update stored integration status for entries using the target media player."""
+    for entry_id, runtime_data in hass.data.get(DOMAIN, {}).items():
+        config_data = runtime_data["data"]
+        if config_data[CONF_MEDIA_PLAYER_ENTITY_ID] != entity_id:
+            continue
+
+        runtime_data[ATTR_LAST_RESPONSE] = raw_response
+        status = dict(runtime_data.get("status", {}))
+
+        if parsed_response:
+            status[ATTR_OK] = parsed_response.get(ATTR_OK)
+            if ATTR_SOURCE in parsed_response:
+                status[ATTR_SOURCE] = parsed_response[ATTR_SOURCE]
+            if ATTR_PICTURE_MODE in parsed_response:
+                status[ATTR_PICTURE_MODE] = _name_from_value(
+                    parsed_response[ATTR_PICTURE_MODE], PICTURE_MODE_BY_VALUE
+                )
+            if ATTR_MEMC in parsed_response:
+                status[ATTR_MEMC] = _name_from_value(
+                    parsed_response[ATTR_MEMC], MEMC_LEVEL_BY_VALUE
+                )
+            if "command" in parsed_response and "value" in parsed_response:
+                if parsed_response["command"] == ATTR_PICTURE_MODE:
+                    status[ATTR_PICTURE_MODE] = _name_from_value(
+                        parsed_response["value"], PICTURE_MODE_BY_VALUE
+                    )
+                if parsed_response["command"] == ATTR_MEMC:
+                    status[ATTR_MEMC] = _name_from_value(
+                        parsed_response["value"], MEMC_LEVEL_BY_VALUE
+                    )
+        else:
+            status[ATTR_OK] = False
+
+        if action == ACTION_SET_PICTURE_MODE:
+            status[ATTR_PICTURE_MODE] = (
+                mode if mode is not None else _name_from_value(value, PICTURE_MODE_BY_VALUE)
+            )
+        if action == ACTION_SET_MEMC:
+            status[ATTR_MEMC] = (
+                level if level is not None else _name_from_value(value, MEMC_LEVEL_BY_VALUE)
+            )
+        if source is not None:
+            status[ATTR_SOURCE] = source
+
+        runtime_data["status"] = status
+        async_dispatcher_send(hass, f"{SIGNAL_STATUS_UPDATED}_{entry_id}")
+
+
+def _name_from_value(value: int | None, names: dict[int, str]) -> str | None:
+    """Return a friendly name for a numeric vendor value."""
+    if value is None:
+        return None
+    return names.get(value, str(value))
+
+
 def config_entry_media_player_entity_id(entry: ConfigEntry) -> str:
     """Return the configured Android TV media player entity id."""
     return entry.data[CONF_MEDIA_PLAYER_ENTITY_ID]
+
+
+def config_entry_runtime_data(hass: HomeAssistant, entry: ConfigEntry) -> dict:
+    """Return runtime data for a config entry."""
+    return hass.data[DOMAIN][entry.entry_id]
