@@ -14,6 +14,16 @@ from .const import (
     ATTR_MEMC,
     ATTR_OK,
     ATTR_PICTURE_MODE,
+    ATTR_PQ_AI_PICTURE,
+    ATTR_PQ_BACKLIGHT,
+    ATTR_PQ_BRIGHTNESS,
+    ATTR_PQ_COLOR_TEMPERATURE,
+    ATTR_PQ_CONTRAST,
+    ATTR_PQ_GAMMA,
+    ATTR_PQ_JSON,
+    ATTR_PQ_LOCAL_CONTRAST,
+    ATTR_PQ_MEMC_EFFECT,
+    ATTR_PQ_PICTURE_MODE,
     ATTR_SOURCE,
     DOMAIN,
     SIGNAL_STATUS_UPDATED,
@@ -31,6 +41,56 @@ async def async_setup_entry(
             XgimiBridgeSensor(entry, "picture_mode", "Picture Mode", ATTR_PICTURE_MODE),
             XgimiBridgeSensor(entry, "memc", "MEMC", ATTR_MEMC),
             XgimiBridgeSensor(entry, "source", "Source", ATTR_SOURCE),
+            XgimiBridgeSensor(
+                entry,
+                "pq_backlight",
+                "Native PQ Backlight",
+                ATTR_PQ_BACKLIGHT,
+            ),
+            XgimiBridgeSensor(
+                entry,
+                "pq_brightness",
+                "Native PQ Brightness",
+                ATTR_PQ_BRIGHTNESS,
+            ),
+            XgimiBridgeSensor(entry, "pq_contrast", "Native PQ Contrast", ATTR_PQ_CONTRAST),
+            XgimiBridgeSensor(entry, "pq_gamma", "Native PQ Gamma", ATTR_PQ_GAMMA),
+            XgimiBridgeSensor(
+                entry,
+                "pq_color_temperature",
+                "Native PQ Color Temperature",
+                ATTR_PQ_COLOR_TEMPERATURE,
+            ),
+            XgimiBridgeSensor(
+                entry,
+                "pq_ai_picture",
+                "Native PQ AI Picture",
+                ATTR_PQ_AI_PICTURE,
+            ),
+            XgimiBridgeSensor(
+                entry,
+                "pq_memc_effect",
+                "Native PQ MEMC",
+                ATTR_PQ_MEMC_EFFECT,
+            ),
+            XgimiBridgeSensor(
+                entry,
+                "pq_local_contrast",
+                "Native PQ Local Contrast",
+                ATTR_PQ_LOCAL_CONTRAST,
+            ),
+            XgimiBridgeSensor(
+                entry,
+                "pq_picture_mode",
+                "Native PQ Picture Mode",
+                ATTR_PQ_PICTURE_MODE,
+            ),
+            XgimiBridgeSensor(
+                entry,
+                "pq_json",
+                "Native PQ JSON",
+                ATTR_PQ_JSON,
+            ),
             XgimiBridgeSensor(entry, "last_ok", "Last Command OK", ATTR_OK),
             XgimiBridgeSensor(
                 entry,
@@ -99,14 +159,17 @@ class XgimiBridgeSensor(SensorEntity):
             else:
                 self._attr_native_value = value
         else:
-            self._attr_native_value = runtime_data.get("status", {}).get(
-                self._status_key
-            )
+            value = runtime_data.get("status", {}).get(self._status_key)
+            self._last_raw_value = value
+            if isinstance(value, str) and len(value) > 250:
+                self._attr_native_value = f"{value[:247]}..."
+            else:
+                self._attr_native_value = value
         self.schedule_update_ha_state()
 
     @property
     def extra_state_attributes(self):
         """Return extra attributes for verbose values."""
-        if self._from_runtime_root and self._last_raw_value is not None:
+        if isinstance(self._last_raw_value, str) and len(self._last_raw_value) > 250:
             return {"raw": self._last_raw_value}
         return None

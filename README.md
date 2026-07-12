@@ -41,6 +41,17 @@ ist daher die MediaTek-PQ-Pipeline:
 Settings -> PqModeManager -> JNI -> vendor.mediatek.hardware.pq-impl.so -> GM_DISP_SCENE_V3
 ```
 
+Bestätigt ist inzwischen ein nativer MediaTek-PQ-Statusleser:
+
+```bash
+scripts/xgimi_h20_adb.py -s 192.168.0.223:5555 pq-get-global-settings
+```
+
+Dieser liest direkt Werte wie `Picture_Mode`, `Backlight`, `Brightness`,
+`Gamma`, `Color_Temperature`, `AI_PQ`, `MJC_Effect` und `Local_Contrast`.
+Schreibzugriffe über `setPqParams*` sind gefunden, benötigen aber noch das
+exakte Firmware-Payload-Format.
+
 ## Bauen
 
 Projekt in Android Studio öffnen und **Build > Build APK(s)** wählen.
@@ -187,9 +198,19 @@ Zusätzlich gibt es Status-Sensoren und einen Button zum manuellen Aktualisieren
 
 ```text
 button.xgimi_control_bridge_refresh_status
+button.xgimi_control_bridge_refresh_native_pq_status
 sensor.xgimi_control_bridge_picture_mode
 sensor.xgimi_control_bridge_memc
 sensor.xgimi_control_bridge_source
+sensor.xgimi_control_bridge_native_pq_backlight
+sensor.xgimi_control_bridge_native_pq_brightness
+sensor.xgimi_control_bridge_native_pq_contrast
+sensor.xgimi_control_bridge_native_pq_gamma
+sensor.xgimi_control_bridge_native_pq_color_temperature
+sensor.xgimi_control_bridge_native_pq_ai_picture
+sensor.xgimi_control_bridge_native_pq_memc
+sensor.xgimi_control_bridge_native_pq_local_contrast
+sensor.xgimi_control_bridge_native_pq_picture_mode
 sensor.xgimi_control_bridge_last_command_ok
 sensor.xgimi_control_bridge_last_adb_response
 ```
@@ -206,6 +227,7 @@ Außerdem stehen Services zur Verfügung:
 xgimi_control_bridge.set_picture_mode
 xgimi_control_bridge.set_memc
 xgimi_control_bridge.get_status
+xgimi_control_bridge.get_native_pq_status
 ```
 
 Beispiel Service-Aufruf:
@@ -216,6 +238,14 @@ target:
   entity_id: media_player.xgimi_h20
 data:
   mode: movie
+```
+
+Nativer MediaTek-PQ-Status:
+
+```yaml
+action: xgimi_control_bridge.get_native_pq_status
+target:
+  entity_id: media_player.xgimi_h20
 ```
 
 MEMC:

@@ -1,0 +1,98 @@
+# MediaTek IPq Transactions
+
+`vendor.mediatek.hardware.pq.IPq/default` is a live NDK AIDL Binder service on
+the XGIMI H20. The exported `BpPq` symbols in
+`vendor.mediatek.hardware.pq-V1-ndk.so` reveal method names and the generated
+stub contains the transaction numbers passed to `AIBinder_transact`.
+
+Extraction:
+
+```bash
+scripts/extract_ipq_transactions.py libs/vendor.mediatek.hardware.pq-V1-ndk.so
+```
+
+## Confirmed Live Read
+
+`getHdrType` is transaction `0x3b` / `59`.
+
+```bash
+adb -s 192.168.0.223:5555 shell \
+  service call vendor.mediatek.hardware.pq.IPq/default 59 i32 4 i32 0 i32 0
+```
+
+Observed on the powered projector with the raw `service call` ABI:
+
+```text
+PQ id 0..3 -> status=0, return_code=0, hdr_type=0
+PQ id 4..8 -> status=0, return_code=3, hdr_type=0
+```
+
+Interpretation: the higher PQ ids are accepted differently by the native service
+than ids `0..3`, but this raw call does not yet expose the visible HDR10 picture
+profile. `return_code=3` is also returned by `setHdrType(4, 3)`.
+
+`getGlobalNonAwarePqSetting` is transaction `0x36` / `54` and returns the active
+native PQ status JSON:
+
+```bash
+scripts/xgimi_h20_adb.py -s 192.168.0.223:5555 pq-get-global-settings
+```
+
+Observed live decode:
+
+```text
+decoded: status=0 return_code=0 json_length=2896
+Picture_Mode=ImaxEnhanced
+Backlight=50
+Brightness=50
+Contrast=50
+Gamma=Dark
+Color_Temperature=User
+AI_PQ=Off
+MJC_Effect=User
+Local_Contrast=Off
+```
+
+This read path is now used by the Home Assistant integration's
+`get_native_pq_status` service.
+
+Minimal write patches do not yet apply:
+
+```text
+0xa0 / 160 setPqParamsByGlobal({"Backlight":"50"}) -> return_code=3
+0x9f / 159 setPqParams(0, {"Brightness":"50"}) -> return_code=3
+```
+
+Next write target: reconstruct the full repository/target payload shape around
+`setPqParams*`, `setPqRepositoryById`, or `setPqRepositoryByPkg`.
+
+## High-Value Transactions
+
+```text
+0x36 / 54   getGlobalNonAwarePqSetting(out EN_RETURN_VALUE[], out string[])
+0x39 / 57   getGlobalRange(string, out EN_RETURN_VALUE[], out string[])
+0x3b / 59   getHdrType(int, out EN_RETURN_VALUE[], out EN_PQ_HDR_TYPE[])
+0x3c / 60   getHdrTypeByWinId(int, out EN_RETURN_VALUE[], out EN_PQ_HDR_TYPE[])
+0x46 / 70   getPQNonLinear(string, out EN_RETURN_VALUE[], out string[])
+0x47 / 71   getPerstreamRange(string, out EN_RETURN_VALUE[], out string[])
+0x4d / 77   getPresetGlobalPqParams(string, out EN_RETURN_VALUE[], out string[])
+0x4e / 78   getPresetPerstreamPqParams(string, out EN_RETURN_VALUE[], out string[])
+0x8a / 138  setHdrType(int, EN_PQ_HDR_TYPE, out EN_RETURN_VALUE)
+0x89 / 137  setHSYUIValue(ST_HSY_ACTOR_INPUT, out EN_RETURN_VALUE[], out ST_HSY_ACTOR_OUTPUT)
+0x92 / 146  setMode(int, DisplayModeSettingData, out EN_RETURN_VALUE)
+0x97 / 151  setPQNonLinear(string, out EN_RETURN_VALUE)
+0x9a / 154  setPqGlobalHdrType(ST_PQSETTING_INFO[], out EN_RETURN_VALUE)
+0x9b / 155  setPqHWParams(int, string, out EN_RETURN_VALUE)
+0x9c / 156  setPqHWParamsByGlobal(string, out EN_RETURN_VALUE)
+0x9e / 158  setPqParamResult(string, out EN_RETURN_VALUE)
+0x9f / 159  setPqParams(int, string, out EN_RETURN_VALUE)
+0xa0 / 160  setPqParamsByGlobal(string, out EN_RETURN_VALUE)
+0xa1 / 161  setPqParamsByID(int, string, out EN_RETURN_VALUE)
+0xa2 / 162  setPqParamsByTarget(string, string, out EN_RETURN_VALUE)
+0xa4 / 164  setPqRepositoryById(int, bool, string, out EN_RETURN_VALUE)
+0xa5 / 165  setPqRepositoryByPkg(string, bool, string, out EN_RETURN_VALUE)
+```
+
+These are the first native candidates for direct HDR picture mode, MEMC,
+brightness, gamma, color temperature, HSY/color tuning, and AI picture without
+DPAD/menu automation.

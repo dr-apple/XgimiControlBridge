@@ -16,4 +16,10 @@ interfaces through one of these paths:
 Confirmed candidates:
 
 - Autofocus: direct `service call`.
-- Picture/HDR/MEMC/color: likely MediaTek PQ path, still under investigation.
+- Native PQ status: direct MediaTek `IPq` transaction `54`
+  (`getGlobalNonAwarePqSetting`) returns active JSON for picture mode,
+  brightness, backlight, gamma, color temperature, AI picture, MEMC/MJC, and
+  local contrast.
+- Picture/HDR/MEMC/color control: MediaTek `setPqParams*` and repository
+  transactions are identified, but minimal JSON write patches currently return
+  `return_code=3`; the exact firmware payload shape still needs reconstruction.

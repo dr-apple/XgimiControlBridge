@@ -26,6 +26,16 @@ from .const import (
     ATTR_MEMC,
     ATTR_OK,
     ATTR_PICTURE_MODE,
+    ATTR_PQ_AI_PICTURE,
+    ATTR_PQ_BACKLIGHT,
+    ATTR_PQ_BRIGHTNESS,
+    ATTR_PQ_COLOR_TEMPERATURE,
+    ATTR_PQ_CONTRAST,
+    ATTR_PQ_GAMMA,
+    ATTR_PQ_JSON,
+    ATTR_PQ_LOCAL_CONTRAST,
+    ATTR_PQ_MEMC_EFFECT,
+    ATTR_PQ_PICTURE_MODE,
     ATTR_SOURCE,
     BRIDGE_COMPONENT,
     CONF_MEDIA_PLAYER_ENTITY_ID,
@@ -34,6 +44,7 @@ from .const import (
     MEMC_LEVELS,
     PICTURE_MODE_BY_VALUE,
     PICTURE_MODES,
+    PQ_SERVICE_CALL_GET_GLOBAL_NON_AWARE,
     SIGNAL_STATUS_UPDATED,
 )
 from homeassistant.helpers.dispatcher import async_dispatcher_send
@@ -103,9 +114,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 def _async_register_services(hass: HomeAssistant) -> None:
     """Register integration services once."""
-    if hass.services.has_service(DOMAIN, "set_picture_mode"):
-        return
-
     async def set_picture_mode(call: ServiceCall) -> None:
         if ATTR_MODE not in call.data and ATTR_VALUE not in call.data:
             raise HomeAssistantError("Either mode or value is required")
@@ -143,24 +151,38 @@ def _async_register_services(hass: HomeAssistant) -> None:
                 source=call.data.get(CONF_SOURCE),
             )
 
-    hass.services.async_register(
-        DOMAIN,
-        "set_picture_mode",
-        set_picture_mode,
-        schema=SET_PICTURE_MODE_SCHEMA,
-    )
-    hass.services.async_register(
-        DOMAIN,
-        "set_memc",
-        set_memc,
-        schema=SET_MEMC_SCHEMA,
-    )
-    hass.services.async_register(
-        DOMAIN,
-        "get_status",
-        get_status,
-        schema=GET_STATUS_SCHEMA,
-    )
+    async def get_native_pq_status(call: ServiceCall) -> None:
+        for entity_id in _entity_ids_from_call(call):
+            await async_get_native_pq_status(hass, entity_id)
+
+    if not hass.services.has_service(DOMAIN, "set_picture_mode"):
+        hass.services.async_register(
+            DOMAIN,
+            "set_picture_mode",
+            set_picture_mode,
+            schema=SET_PICTURE_MODE_SCHEMA,
+        )
+    if not hass.services.has_service(DOMAIN, "set_memc"):
+        hass.services.async_register(
+            DOMAIN,
+            "set_memc",
+            set_memc,
+            schema=SET_MEMC_SCHEMA,
+        )
+    if not hass.services.has_service(DOMAIN, "get_status"):
+        hass.services.async_register(
+            DOMAIN,
+            "get_status",
+            get_status,
+            schema=GET_STATUS_SCHEMA,
+        )
+    if not hass.services.has_service(DOMAIN, "get_native_pq_status"):
+        hass.services.async_register(
+            DOMAIN,
+            "get_native_pq_status",
+            get_native_pq_status,
+            schema=GET_STATUS_SCHEMA,
+        )
 
 
 def _entity_ids_from_call(call: ServiceCall) -> list[str]:
@@ -221,6 +243,28 @@ async def async_send_bridge_command(
         level=level,
         value=value,
         source=source,
+    )
+
+
+async def async_get_native_pq_status(hass: HomeAssistant, entity_id: str) -> None:
+    """Read the native MediaTek PQ status JSON via Android's service command."""
+    await hass.services.async_call(
+        ANDROIDTV_DOMAIN,
+        ADB_COMMAND_SERVICE,
+        {"command": PQ_SERVICE_CALL_GET_GLOBAL_NON_AWARE},
+        blocking=True,
+        target={ATTR_ENTITY_ID: entity_id},
+    )
+
+    raw_response = _adb_response_from_entity(hass, entity_id)
+    pq_json = _parse_service_call_utf16_string(raw_response)
+    pq_settings = _parse_json_object(pq_json)
+    _update_matching_entries_with_native_pq(
+        hass,
+        entity_id,
+        raw_response,
+        pq_json,
+        pq_settings,
     )
 
 
@@ -285,6 +329,85 @@ def _parse_broadcast_response(raw_response: str | None) -> dict | None:
     except json.JSONDecodeError:
         _LOGGER.debug("Could not parse XGIMI broadcast data payload: %s", data)
         return None
+
+
+def _parse_service_call_utf16_string(raw_response: str | None) -> str | None:
+    """Extract the first UTF-16 string payload from Android service call output."""
+    if not raw_response:
+        return None
+
+    words: list[int] = []
+    for token in raw_response.replace("'", " ").replace(")", " ").split():
+        if token.startswith("0x"):
+            continue
+        try:
+            words.append(int(token, 16))
+        except ValueError:
+            continue
+
+    if len(words) < 5:
+        return None
+
+    # Parcel layout observed for getGlobalNonAwarePqSetting:
+    # status, return-vector-size, return-code, string-vector-size, string-length, UTF-16 data...
+    if words[1] != 1 or words[3] != 1:
+        return None
+
+    string_length = words[4]
+    chars: list[str] = []
+    for word in words[5:]:
+        for shift in (0, 16):
+            codepoint = (word >> shift) & 0xFFFF
+            if codepoint:
+                chars.append(chr(codepoint))
+            if len(chars) >= string_length:
+                return "".join(chars)
+    return "".join(chars) if chars else None
+
+
+def _parse_json_object(raw_json: str | None) -> dict | None:
+    """Return a JSON object if raw_json contains one."""
+    if not raw_json:
+        return None
+    try:
+        parsed = json.loads(raw_json)
+    except json.JSONDecodeError:
+        _LOGGER.debug("Could not parse native PQ JSON: %s", raw_json[:250])
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
+def _update_matching_entries_with_native_pq(
+    hass: HomeAssistant,
+    entity_id: str,
+    raw_response: str | None,
+    pq_json: str | None,
+    pq_settings: dict | None,
+) -> None:
+    """Update stored integration status for entries using native MediaTek PQ data."""
+    for entry_id, runtime_data in hass.data.get(DOMAIN, {}).items():
+        config_data = runtime_data["data"]
+        if config_data[CONF_MEDIA_PLAYER_ENTITY_ID] != entity_id:
+            continue
+
+        runtime_data[ATTR_LAST_RESPONSE] = raw_response
+        status = dict(runtime_data.get("status", {}))
+        status[ATTR_OK] = pq_settings is not None
+        status[ATTR_PQ_JSON] = pq_json
+
+        if pq_settings:
+            status[ATTR_PQ_BACKLIGHT] = pq_settings.get("Backlight")
+            status[ATTR_PQ_BRIGHTNESS] = pq_settings.get("Brightness")
+            status[ATTR_PQ_CONTRAST] = pq_settings.get("Contrast")
+            status[ATTR_PQ_GAMMA] = pq_settings.get("Gamma")
+            status[ATTR_PQ_COLOR_TEMPERATURE] = pq_settings.get("Color_Temperature")
+            status[ATTR_PQ_AI_PICTURE] = pq_settings.get("AI_PQ")
+            status[ATTR_PQ_MEMC_EFFECT] = pq_settings.get("MJC_Effect")
+            status[ATTR_PQ_LOCAL_CONTRAST] = pq_settings.get("Local_Contrast")
+            status[ATTR_PQ_PICTURE_MODE] = pq_settings.get("Picture_Mode")
+
+        runtime_data["status"] = status
+        async_dispatcher_send(hass, f"{SIGNAL_STATUS_UPDATED}_{entry_id}")
 
 
 def _update_matching_entries(

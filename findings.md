@@ -199,3 +199,102 @@ PqService_aipqEnable_native
 PqService_aipqSetStr_native
 PqService_aipqSupported_native
 ```
+
+## Confirmed MediaTek IPq Binder Access
+
+Direct Binder access to `vendor.mediatek.hardware.pq.IPq/default` works from
+ADB shell for at least read calls.
+
+Confirmed transaction:
+
+```text
+0x3b / 59 = getHdrType(int pqId, out return[], out hdrType[])
+```
+
+Observed live values:
+
+```text
+PQ id 0..3 -> status=0, return_code=0, hdr_type=0
+PQ id 4..8 -> status=0, return_code=3, hdr_type=0
+```
+
+Interpretation: the higher PQ ids are accepted differently by the native service
+than ids `0..3`, but the raw `getHdrType` call does not yet expose the visible
+HDR10 picture profile. This still fits the earlier failed bridge tests: they
+were aimed at XGIMI/legacy methods, while the visible HDR10 picture profile is
+likely managed by the MediaTek PQ stream/repository layer.
+
+High-value write candidates recovered from the NDK AIDL stub:
+
+```text
+0x8a / 138 = setHdrType(int pqId, EN_PQ_HDR_TYPE hdrType, out return)
+0x9f / 159 = setPqParams(int pqId, string params, out return)
+0xa0 / 160 = setPqParamsByGlobal(string params, out return)
+0xa1 / 161 = setPqParamsByID(int id, string params, out return)
+0xa4 / 164 = setPqRepositoryById(int streamId, bool enable, string params, out return)
+0xa5 / 165 = setPqRepositoryByPkg(string package, bool enable, string params, out return)
+```
+
+### Native PQ Status JSON
+
+`getGlobalNonAwarePqSetting` is transaction `0x36` / `54` and returns a live
+UTF-16 JSON string from the MediaTek PQ stack.
+
+Reproducible command:
+
+```bash
+scripts/xgimi_h20_adb.py -s 192.168.0.223:5555 pq-get-global-settings
+```
+
+Live result on the powered projector:
+
+```text
+decoded: status=0 return_code=0 json_length=2896
+Picture_Mode=ImaxEnhanced
+Backlight=50
+Brightness=50
+Contrast=50
+Gamma=Dark
+Color_Temperature=User
+AI_PQ=Off
+MJC_Effect=User
+Local_Contrast=Off
+```
+
+This is the first confirmed native status path for the visible picture pipeline.
+It is now exposed in the Home Assistant integration through
+`xgimi_control_bridge.get_native_pq_status` and native PQ sensors.
+
+Write attempts with minimal JSON patches currently return `return_code=3`:
+
+```text
+setPqParamsByGlobal({"Backlight":"50"}) -> return_code=3
+setPqParams(0, {"Brightness":"50"}) -> return_code=3
+```
+
+Interpretation: read access is solved. Write access likely needs the exact
+repository/target payload shape used by the MediaTek settings app, not a minimal
+single-key JSON patch.
+
+## Picture JSON Profile Model
+
+`GmTvManager.getPictureModeJson(int ePicMode, int reserved)` returns
+`RspPictureModeJson(retCode, jsonText)`.
+
+The bridge app now exposes this as action
+`de.drapple.xgimi.GET_PICTURE_JSON`, but live scans over modes `0..10,30,31`
+and reserved values `0..4` returned `ret_code=0` with empty `json_text`.
+This confirms the XGIMI wrapper method is not the active HDR10 profile source on
+the tested firmware state.
+
+The firmware default JSON has two important sections:
+
+```text
+perstream: Brightness, Contrast, Hue, MJC_Effect, AI_PQ, AISR,
+           Local_Contrast, Gaming_MJC_Lvl, MJC_Deblur, MJC_Dejudder
+global:    Backlight, Gamma, Color_Temperature, xgimiColorTemp,
+           Live_Tone, Dark_Detail, Global_Dimming, Saturation
+```
+
+This is the first concrete native profile model that can cover brightness,
+MEMC, AI picture, gamma, and color temperature without DPAD/menu automation.
