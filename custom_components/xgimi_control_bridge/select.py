@@ -125,4 +125,4 @@ class XgimiBridgeSelect(SelectEntity):
         option = status.get(status_key)
         if option in self.options:
             self._attr_current_option = option
-        self.async_write_ha_state()
+        self.schedule_update_ha_state()
