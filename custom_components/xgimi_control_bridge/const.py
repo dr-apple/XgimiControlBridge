@@ -11,6 +11,16 @@ ATTR_LAST_RESPONSE = "last_response"
 ATTR_MEMC = "memc"
 ATTR_OK = "ok"
 ATTR_PICTURE_MODE = "picture_mode"
+ATTR_PQ_AI_PICTURE = "pq_ai_picture"
+ATTR_PQ_BACKLIGHT = "pq_backlight"
+ATTR_PQ_BRIGHTNESS = "pq_brightness"
+ATTR_PQ_COLOR_TEMPERATURE = "pq_color_temperature"
+ATTR_PQ_CONTRAST = "pq_contrast"
+ATTR_PQ_GAMMA = "pq_gamma"
+ATTR_PQ_JSON = "pq_json"
+ATTR_PQ_LOCAL_CONTRAST = "pq_local_contrast"
+ATTR_PQ_MEMC_EFFECT = "pq_memc_effect"
+ATTR_PQ_PICTURE_MODE = "pq_picture_mode"
 ATTR_SOURCE = "source"
 
 ANDROIDTV_DOMAIN = "androidtv"
@@ -20,6 +30,10 @@ BRIDGE_COMPONENT = "de.drapple.xgimi/.XgimiCommandReceiver"
 ACTION_SET_PICTURE_MODE = "de.drapple.xgimi.SET_PICTURE_MODE"
 ACTION_SET_MEMC = "de.drapple.xgimi.SET_MEMC"
 ACTION_GET_STATUS = "de.drapple.xgimi.GET_STATUS"
+
+PQ_SERVICE_CALL_GET_GLOBAL_NON_AWARE = (
+    "service call vendor.mediatek.hardware.pq.IPq/default 54 i32 0 i32 0"
+)
 
 PICTURE_MODES = [
     "bright",

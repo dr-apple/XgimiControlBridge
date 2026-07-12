@@ -74,3 +74,10 @@ get_status:
           min: 0
           max: 99
           mode: box
+
+get_native_pq_status:
+  name: Get native PQ status
+  description: Read the native MediaTek PQ status JSON through Android service call.
+  target:
+    entity:
+      domain: media_player

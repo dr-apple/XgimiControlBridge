@@ -88,6 +88,28 @@ public final class XgimiCommandReceiver extends BroadcastReceiver {
                 return;
             }
 
+            if ("de.drapple.xgimi.GET_PICTURE_JSON".equals(action)) {
+                int mode = intent.hasExtra("mode_value")
+                        ? intent.getIntExtra("mode_value", 0)
+                        : intent.getIntExtra("mode", 0);
+                int reserved = intent.getIntExtra("reserved", 0);
+                PictureJsonResult result = readPictureJson(cls, manager, mode, reserved);
+
+                JSONObject json = new JSONObject();
+                json.put("ok", true);
+                json.put("command", "picture_json");
+                json.put("mode", mode);
+                json.put("reserved", reserved);
+                json.put("ret_code", result.retCode);
+                json.put("json_length", result.jsonText == null ? 0 : result.jsonText.length());
+                json.put("json_text", result.jsonText == null ? "" : result.jsonText);
+
+                setResultCode(1);
+                setResultData(json.toString());
+                Log.i(TAG, json.toString());
+                return;
+            }
+
             fail("Unknown action: " + action, null);
         } catch (Throwable error) {
             fail("Command failed", error);
@@ -145,6 +167,15 @@ public final class XgimiCommandReceiver extends BroadcastReceiver {
         return new StatusResult(picture, memc, backend);
     }
 
+    private static PictureJsonResult readPictureJson(Class<?> cls, Object manager, int mode, int reserved)
+            throws Exception {
+        Object response = cls.getMethod("getPictureModeJson", int.class, int.class)
+                .invoke(manager, mode, reserved);
+        int retCode = readIntMember(response, "getRetCode", "retCode");
+        String jsonText = readStringMember(response, "getJsonText", "jsonText");
+        return new PictureJsonResult(retCode, jsonText);
+    }
+
     private static Object getVideoManager() throws Exception {
         Class<?> videoClass = Class.forName(VIDEO_MANAGER_CLASS);
         return videoClass.getMethod("getInstance").invoke(null);
@@ -199,6 +230,26 @@ public final class XgimiCommandReceiver extends BroadcastReceiver {
         return ((Number) m.invoke(target, args)).intValue();
     }
 
+    private static int readIntMember(Object target, String getter, String fieldName) throws Exception {
+        try {
+            return ((Number) target.getClass().getMethod(getter).invoke(target)).intValue();
+        } catch (NoSuchMethodException ignored) {
+            Field field = target.getClass().getField(fieldName);
+            return field.getInt(target);
+        }
+    }
+
+    private static String readStringMember(Object target, String getter, String fieldName) throws Exception {
+        try {
+            Object value = target.getClass().getMethod(getter).invoke(target);
+            return value == null ? "" : String.valueOf(value);
+        } catch (NoSuchMethodException ignored) {
+            Field field = target.getClass().getField(fieldName);
+            Object value = field.get(target);
+            return value == null ? "" : String.valueOf(value);
+        }
+    }
+
     private void success(String command, int source, int value, CommandResult result) {
         try {
             JSONObject json = new JSONObject();
@@ -242,6 +293,16 @@ public final class XgimiCommandReceiver extends BroadcastReceiver {
             this.pictureMode = pictureMode;
             this.memcLevel = memcLevel;
             this.backend = backend;
+        }
+    }
+
+    private static final class PictureJsonResult {
+        final int retCode;
+        final String jsonText;
+
+        PictureJsonResult(int retCode, String jsonText) {
+            this.retCode = retCode;
+            this.jsonText = jsonText;
         }
     }
 }
