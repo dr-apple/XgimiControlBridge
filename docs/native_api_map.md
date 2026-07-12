@@ -93,3 +93,44 @@ com.mediatek.tv.settings
 
 Status: highest-priority path for HDR picture mode, MEMC, color temperature,
 gamma, brightness, and AI picture.
+
+Confirmed service:
+
+```text
+vendor.mediatek.hardware.pq.IPq/default
+```
+
+Confirmed descriptors/types in `vendor.mediatek.hardware.pq-V1-ndk.so`:
+
+```text
+vendor.mediatek.hardware.pq.IPq
+vendor.mediatek.hardware.pq.PqConfig
+vendor.mediatek.hardware.pq.PqInfo
+vendor.mediatek.hardware.pq.PqTable
+vendor.mediatek.hardware.pq.PQparam
+vendor.mediatek.hardware.pq.ST_PQSETTING_INFO
+vendor.mediatek.hardware.pq.ST_INPUT_VIDEO_FORMAT
+vendor.mediatek.hardware.pq.ST_OUTPUT_VIDEO_FORMAT
+vendor.mediatek.hardware.pq.ST_HDRMetadata
+vendor.mediatek.hardware.pq.ST_HSY_ACTOR_INPUT
+vendor.mediatek.hardware.pq.ST_HSY_ACTOR_OUTPUT
+vendor.mediatek.hardware.pq.ReportPqUIStatus
+vendor.mediatek.hardware.pq.ReportFormatInfo
+vendor.mediatek.hardware.pq.ExecuteTable
+vendor.mediatek.hardware.pq.PreferTable
+```
+
+Permission barrier:
+
+```text
+content://com.mediatek.tv.settingspqdb/*
+requires com.mediatek.tv.agent.settingspqdb.permission.READ_DATA
+or com.mediatek.tv.agent.settingspqdb.permission.WRITE_DATA
+```
+
+Practical options:
+
+1. Reconstruct `IPq` AIDL calls and call binder directly.
+2. Build a helper APK that declares MediaTek permissions and test whether they are
+   normal, privileged, or signature-only.
+3. If signature-only, use direct binder or a system/privileged install path.

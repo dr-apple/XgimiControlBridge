@@ -75,3 +75,127 @@ adb shell am start \
 ```
 
 This opens the original HDR10 picture mode page.
+
+## Pulled Local Inputs
+
+The following proprietary files are now present locally and ignored by Git:
+
+```text
+apks/XgimiTvSettingsVendor.apk
+apks/TvAgentService.apk
+apks/XRMService.apk
+apks/MiscKey.apk
+framework/com.xgimi.api.jar
+libs/vendor.mediatek.hardware.pq-V1-ndk.so
+libs/vendor.mediatek.hardware.pq-impl.so
+libs/xgimi.hardware.gmpf-V1-ndk.so
+libs/libPqService.so
+libs/libaipqservice.so
+libs/libpqactor.so
+libs/libmi3_pq_hal.so
+```
+
+## MediaTek PQ Services
+
+Additional confirmed binder services:
+
+```text
+vendor.mediatek.hardware.pq.IPq/default
+vendor.mediatek.hardware.render.IRender/default
+vendor.mediatek.hardware.capture.ICapture/default
+vendor.mediatek.hardware.aiexecutor.IAiexecutor/default
+vendor.mediatek.hardware.audioext.IAudioExt/audioext
+```
+
+## Settings PQ Database
+
+`XgimiTvSettingsVendor.apk` and `MiscKey.apk` reference:
+
+```text
+content://com.mediatek.tv.settingspqdb/general
+content://com.mediatek.tv.settingspqdb/hdr
+content://com.mediatek.tv.settingspqdb/source
+content://com.mediatek.tv.settingspqdb/stream
+content://com.mediatek.tv.settingspqdb/gamemode
+content://com.mediatek.tv.settingspqdb/videoInfo
+content://com.mediatek.tv.settingspqdb/reset
+```
+
+Direct shell access is blocked:
+
+```text
+requires com.mediatek.tv.agent.settingspqdb.permission.READ_DATA
+or com.mediatek.tv.agent.settingspqdb.permission.WRITE_DATA
+```
+
+Interpretation: the original settings app likely updates PQ state through this
+provider. A sideloaded helper will only use this path if the MediaTek permission
+is grantable; otherwise we need direct `vendor.mediatek.hardware.pq.IPq/default`.
+
+## Picture Mode Storage Model
+
+`MiscKey.apk` contains `GamePictureModeEntity` with fields:
+
+```text
+source
+hdrType
+pqMode
+isActive
+brightness
+contrast
+saturation
+sharpness
+colorTemp
+twoPointWBR
+twoPointWBG
+twoPointWBB
+localContrast
+memc
+gamma
+mpegNR
+dlc
+gamingMJC
+```
+
+Relevant methods/strings:
+
+```text
+setPictureModeIdx(), paras ePicMode =
+setColorTempratureIdx(), paras colorTempIdx =
+setColorTempIdx(), paras eColorTemp =
+setPictureMode(), paras pictureMode =
+getPictureModeJson(source, hdrType)
+GamePQModeDao.queryPictureMode(source, hdrType, pqMode)
+GamePQModeDao.updatePictureMode(...)
+```
+
+Interpretation: HDR picture mode is tied to source + hdrType + pqMode rows and
+per-stream JSON/PQ parameters, not just a single global integer.
+
+## Native PQ Stack
+
+Native strings confirm:
+
+```text
+vendor.mediatek.hardware.pq.IPq/default
+vendor.mediatek.hardware.pq.IPq
+PQ_AIDL
+AServiceManager_waitForService
+MI_PQ_SetHdrType
+MI_PQ_GetHdrType
+MI_PQ_ApplyParams_UpdateGlobalHDR
+MI_PQ_ApplyParams_UpdatePerStreamHDR
+MI_PQ_ApplyParams_SetRepoAllPkgByHdr
+MI_PQ_ApplyParams_GetRepoWinParamsByHdr
+MI_PQ_SetAIPQEnable
+MI_PQRM_MEMC_Get_Table_Info
+MI_PQRM_MEMC_Get_MJC_Effect_Info
+```
+
+`libPqService.so` exposes JNI methods:
+
+```text
+PqService_aipqEnable_native
+PqService_aipqSetStr_native
+PqService_aipqSupported_native
+```
