@@ -102,7 +102,7 @@ class XgimiBridgeSensor(SensorEntity):
             self._attr_native_value = runtime_data.get("status", {}).get(
                 self._status_key
             )
-        self.async_write_ha_state()
+        self.schedule_update_ha_state()
 
     @property
     def extra_state_attributes(self):
