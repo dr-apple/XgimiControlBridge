@@ -171,5 +171,5 @@ class XgimiBridgeSensor(SensorEntity):
     def extra_state_attributes(self):
         """Return extra attributes for verbose values."""
         if isinstance(self._last_raw_value, str) and len(self._last_raw_value) > 250:
-            return {"raw": self._last_raw_value}
+            return {"raw_length": len(self._last_raw_value)}
         return None

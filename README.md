@@ -199,14 +199,33 @@ Manuelle Installation:
    öffnen und **XGIMI Control Bridge** auswählen.
 4. Die bestehende Android-TV-/ADB-`media_player`-Entity des Projektors auswählen.
 
-Die Integration legt zwei Select-Entities an:
+Die Integration legt zwei klassische Select-Entities fuer die alte XGIMI-Bridge an:
 
 ```text
 select.xgimi_control_bridge_picture_mode
 select.xgimi_control_bridge_memc
 ```
 
-Zusätzlich gibt es Status-Sensoren und einen Button zum manuellen Aktualisieren:
+Fuer die bestaetigte native MediaTek-PQ-Steuerung gibt es zusaetzlich echte
+HA-Regler:
+
+```text
+number.xgimi_control_bridge_native_pq_backlight
+number.xgimi_control_bridge_native_pq_brightness
+number.xgimi_control_bridge_native_pq_contrast
+```
+
+Diese Regler schreiben direkt ueber `vendor.mediatek.hardware.pq.IPq/default`
+und lesen den Status danach wieder zurueck. Auf deiner Anlage heissen sie je
+nach gewaehlter Entity zum Beispiel:
+
+```text
+number.wohnzimmer_xgimi_control_bridge_native_pq_backlight
+number.wohnzimmer_xgimi_control_bridge_native_pq_brightness
+number.wohnzimmer_xgimi_control_bridge_native_pq_contrast
+```
+
+Zusaetzlich gibt es Status-Sensoren und einen Button zum manuellen Aktualisieren:
 
 ```text
 button.xgimi_control_bridge_refresh_status
@@ -228,10 +247,10 @@ sensor.xgimi_control_bridge_last_adb_response
 ```
 
 Der Status wird aus dem `adb_response`-Attribut der Android-TV-ADB-Entity gelesen.
-Wenn Steuerung oder Status nicht funktionieren, zuerst den Button **Refresh Status**
-drücken und danach `sensor.xgimi_control_bridge_last_adb_response` prüfen. Dort steht
-die rohe Antwort von `am broadcast`, inklusive möglicher Java-/Reflection-Fehler aus
-der Android-Bridge.
+Wenn Steuerung oder Status nicht funktionieren, zuerst den Button
+**Refresh Native PQ Status** druecken und danach die nativen Sensoren pruefen.
+Der Roh-ADB-Sensor wird absichtlich gekuerzt, damit Home Assistant keine zu grossen
+Recorder-Attribute speichert.
 
 Außerdem stehen Services zur Verfügung:
 
