@@ -323,6 +323,22 @@ target:
   entity_id: media_player.xgimi_h20
 ```
 
+### XGIMI Middleware Diagnose
+
+Ab Bridge-APK `0.1.9` kann der erreichbare XGIMI-MiscKey-Middleware-Service
+diagnostisch abgefragt werden:
+
+```bash
+scripts/xgimi_h20_adb.py -s 192.168.0.223:5555 \
+  bridge-middleware-exec-sync getBoostEnable
+```
+
+Bestaetigt erreichbar sind zum Beispiel `getBoostEnable` und `getALOnOff`.
+Die naheliegenden Picture-Mode-Kommandos `getPQMode`, `queryPQMode`,
+`getPictureMode` und `getImageMode` liefern derzeit leer zurueck; der sichtbare
+Bildmodus ist also auch ueber diesen oeffentlichen Middleware-Eingang noch nicht
+freigelegt.
+
 MEMC:
 
 ```yaml
