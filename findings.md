@@ -265,16 +265,17 @@ This is the first confirmed native status path for the visible picture pipeline.
 It is now exposed in the Home Assistant integration through
 `xgimi_control_bridge.get_native_pq_status` and native PQ sensors.
 
-Write attempts with minimal JSON patches currently return `return_code=3`:
+Minimal JSON writes work once the JSON payload is correctly quoted through the
+Android shell:
 
 ```text
-setPqParamsByGlobal({"Backlight":"50"}) -> return_code=3
-setPqParams(0, {"Brightness":"50"}) -> return_code=3
+setPqParamsByGlobal({"Backlight":40}) -> status=0 return_code=0
+Backlight 40 -> 41 -> 40 live readback succeeded
 ```
 
-Interpretation: read access is solved. Write access likely needs the exact
-repository/target payload shape used by the MediaTek settings app, not a minimal
-single-key JSON patch.
+Interpretation: read and basic write access are solved through the native
+`vendor.mediatek.hardware.pq.IPq/default` service. This path works from ADB shell
+without the privileged `com.mediatek.extservice` OSD API.
 
 ## MediaTek OSD API Layer
 

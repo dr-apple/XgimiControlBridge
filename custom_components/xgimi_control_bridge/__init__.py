@@ -46,6 +46,8 @@ from .const import (
     PICTURE_MODE_BY_VALUE,
     PICTURE_MODES,
     PQ_SERVICE_CALL_GET_GLOBAL_NON_AWARE,
+    PQ_SERVICE_CALL_SET_GLOBAL_TRANSACTION,
+    PQ_SERVICE_NAME,
     SIGNAL_STATUS_UPDATED,
 )
 from homeassistant.helpers.dispatcher import async_dispatcher_send
@@ -55,6 +57,7 @@ _LOGGER = logging.getLogger(__name__)
 PLATFORMS: list[Platform] = [Platform.BUTTON, Platform.SELECT, Platform.SENSOR]
 
 ATTR_LEVEL = "level"
+ATTR_KEY = "key"
 ATTR_MODE = "mode"
 ATTR_VALUE = "value"
 
@@ -86,6 +89,15 @@ GET_STATUS_SCHEMA = vol.Schema(
     {
         vol.Optional(ATTR_ENTITY_ID): cv.entity_ids,
         vol.Optional(CONF_SOURCE): vol.Coerce(int),
+    },
+    extra=vol.PREVENT_EXTRA,
+)
+
+SET_NATIVE_PQ_VALUE_SCHEMA = vol.Schema(
+    {
+        vol.Optional(ATTR_ENTITY_ID): cv.entity_ids,
+        vol.Required(ATTR_KEY): cv.string,
+        vol.Required(ATTR_VALUE): vol.Any(str, int, float, bool),
     },
     extra=vol.PREVENT_EXTRA,
 )
@@ -156,6 +168,15 @@ def _async_register_services(hass: HomeAssistant) -> None:
         for entity_id in _entity_ids_from_call(call):
             await async_get_native_pq_status(hass, entity_id)
 
+    async def set_native_pq_value(call: ServiceCall) -> None:
+        for entity_id in _entity_ids_from_call(call):
+            await async_set_native_pq_value(
+                hass,
+                entity_id,
+                call.data[ATTR_KEY],
+                call.data[ATTR_VALUE],
+            )
+
     async def get_ext_pq_status(call: ServiceCall) -> None:
         for entity_id in _entity_ids_from_call(call):
             await async_get_ext_pq_status(hass, entity_id)
@@ -187,6 +208,13 @@ def _async_register_services(hass: HomeAssistant) -> None:
             "get_native_pq_status",
             get_native_pq_status,
             schema=GET_STATUS_SCHEMA,
+        )
+    if not hass.services.has_service(DOMAIN, "set_native_pq_value"):
+        hass.services.async_register(
+            DOMAIN,
+            "set_native_pq_value",
+            set_native_pq_value,
+            schema=SET_NATIVE_PQ_VALUE_SCHEMA,
         )
     if not hass.services.has_service(DOMAIN, "get_ext_pq_status"):
         hass.services.async_register(
@@ -260,6 +288,21 @@ async def async_send_bridge_command(
 
 async def async_get_native_pq_status(hass: HomeAssistant, entity_id: str) -> None:
     """Read the native MediaTek PQ status JSON via Android's service command."""
+    raw_response, pq_json, pq_settings = await async_read_native_pq_settings(hass, entity_id)
+    _update_matching_entries_with_native_pq(
+        hass,
+        entity_id,
+        raw_response,
+        pq_json,
+        pq_settings,
+    )
+
+
+async def async_read_native_pq_settings(
+    hass: HomeAssistant,
+    entity_id: str,
+) -> tuple[str | None, str | None, dict | None]:
+    """Read the native MediaTek PQ status JSON without updating entities."""
     await hass.services.async_call(
         ANDROIDTV_DOMAIN,
         ADB_COMMAND_SERVICE,
@@ -271,13 +314,37 @@ async def async_get_native_pq_status(hass: HomeAssistant, entity_id: str) -> Non
     raw_response = _adb_response_from_entity(hass, entity_id)
     pq_json = _parse_service_call_utf16_string(raw_response)
     pq_settings = _parse_json_object(pq_json)
-    _update_matching_entries_with_native_pq(
-        hass,
-        entity_id,
-        raw_response,
-        pq_json,
-        pq_settings,
+    return raw_response, pq_json, pq_settings
+
+
+async def async_set_native_pq_value(
+    hass: HomeAssistant,
+    entity_id: str,
+    key: str,
+    value: str | int | float | bool,
+) -> None:
+    """Set one MediaTek PQ key via setPqParamsByGlobal and refresh status."""
+    parsed_value = _parse_service_value(value)
+    payload = json.dumps({key: parsed_value}, separators=(",", ":"))
+    command = _build_native_pq_set_global_command(payload)
+
+    await hass.services.async_call(
+        ANDROIDTV_DOMAIN,
+        ADB_COMMAND_SERVICE,
+        {"command": command},
+        blocking=True,
+        target={ATTR_ENTITY_ID: entity_id},
     )
+
+    raw_response = _adb_response_from_entity(hass, entity_id)
+    words = _parse_service_call_words(raw_response)
+    if len(words) < 2 or words[0] != 0 or words[1] != 0:
+        raise HomeAssistantError(
+            f"Native PQ write failed for {key}: {raw_response or 'empty response'}"
+        )
+
+    _LOGGER.info("Native PQ %s set to %r", key, parsed_value)
+    await async_get_native_pq_status(hass, entity_id)
 
 
 async def async_get_ext_pq_status(hass: HomeAssistant, entity_id: str) -> None:
@@ -312,6 +379,19 @@ def _build_broadcast_command(
     if source is not None:
         parts.extend(["--ei", "source", str(source)])
 
+    return " ".join(shlex.quote(part) for part in parts)
+
+
+def _build_native_pq_set_global_command(payload: str) -> str:
+    """Build a native MediaTek PQ setPqParamsByGlobal service call."""
+    parts = [
+        "service",
+        "call",
+        PQ_SERVICE_NAME,
+        str(PQ_SERVICE_CALL_SET_GLOBAL_TRANSACTION),
+        "s16",
+        payload,
+    ]
     return " ".join(shlex.quote(part) for part in parts)
 
 
@@ -350,17 +430,7 @@ def _parse_broadcast_response(raw_response: str | None) -> dict | None:
 
 def _parse_service_call_utf16_string(raw_response: str | None) -> str | None:
     """Extract the first UTF-16 string payload from Android service call output."""
-    if not raw_response:
-        return None
-
-    words: list[int] = []
-    for token in raw_response.replace("'", " ").replace(")", " ").split():
-        if token.startswith("0x"):
-            continue
-        try:
-            words.append(int(token, 16))
-        except ValueError:
-            continue
+    words = _parse_service_call_words(raw_response)
 
     if len(words) < 5:
         return None
@@ -382,6 +452,22 @@ def _parse_service_call_utf16_string(raw_response: str | None) -> str | None:
     return "".join(chars) if chars else None
 
 
+def _parse_service_call_words(raw_response: str | None) -> list[int]:
+    """Extract hexadecimal parcel words from Android service call output."""
+    if not raw_response:
+        return []
+
+    words: list[int] = []
+    for token in raw_response.replace("'", " ").replace(")", " ").split():
+        if token.startswith("0x"):
+            continue
+        try:
+            words.append(int(token, 16))
+        except ValueError:
+            continue
+    return words
+
+
 def _parse_json_object(raw_json: str | None) -> dict | None:
     """Return a JSON object if raw_json contains one."""
     if not raw_json:
@@ -392,6 +478,19 @@ def _parse_json_object(raw_json: str | None) -> dict | None:
         _LOGGER.debug("Could not parse native PQ JSON: %s", raw_json[:250])
         return None
     return parsed if isinstance(parsed, dict) else None
+
+
+def _parse_service_value(value: str | int | float | bool) -> str | int | float | bool:
+    """Parse text service values as JSON scalars when possible."""
+    if not isinstance(value, str):
+        return value
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError:
+        return value
+    if isinstance(parsed, str | int | float | bool):
+        return parsed
+    return value
 
 
 def _update_matching_entries_with_native_pq(

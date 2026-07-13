@@ -240,6 +240,7 @@ xgimi_control_bridge.set_picture_mode
 xgimi_control_bridge.set_memc
 xgimi_control_bridge.get_status
 xgimi_control_bridge.get_native_pq_status
+xgimi_control_bridge.set_native_pq_value
 xgimi_control_bridge.get_ext_pq_status
 ```
 
@@ -259,6 +260,17 @@ Nativer MediaTek-PQ-Status:
 action: xgimi_control_bridge.get_native_pq_status
 target:
   entity_id: media_player.xgimi_h20
+```
+
+Nativer MediaTek-PQ-Schreibzugriff, live bestätigt mit Backlight 40 -> 41 -> 40:
+
+```yaml
+action: xgimi_control_bridge.set_native_pq_value
+target:
+  entity_id: media_player.xgimi_h20
+data:
+  key: Backlight
+  value: 40
 ```
 
 OSD-nahe ExtService-PQ-Schicht:

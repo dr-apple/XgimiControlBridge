@@ -82,6 +82,22 @@ get_native_pq_status:
     entity:
       domain: media_player
 
+set_native_pq_value:
+  name: Set native PQ value
+  description: Read the current native MediaTek PQ JSON, change one key, and write the full JSON back.
+  target:
+    entity:
+      domain: media_player
+  fields:
+    key:
+      required: true
+      selector:
+        text:
+    value:
+      required: true
+      selector:
+        text:
+
 get_ext_pq_status:
   name: Get ExtService PQ status
   description: Read MediaTek PQ status through the bridge APK and the OSD-adjacent ExtService path.
