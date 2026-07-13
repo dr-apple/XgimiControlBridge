@@ -47,6 +47,7 @@ from .const import (
     PICTURE_MODES,
     PQ_SERVICE_CALL_GET_GLOBAL_NON_AWARE,
     PQ_SERVICE_CALL_SET_GLOBAL_TRANSACTION,
+    PQ_SERVICE_CALL_SET_PERSTREAM_TRANSACTION,
     PQ_SERVICE_NAME,
     SIGNAL_STATUS_UPDATED,
 )
@@ -69,6 +70,19 @@ ATTR_VALUE = "value"
 _BROADCAST_DATA_RE = re.compile(
     r'data=(?P<quote>["\'])(?P<data>.*)(?P=quote)', re.DOTALL
 )
+
+_NATIVE_PQ_PERSTREAM_KEYS = {
+    "AI_PQ",
+    "AISR",
+    "Brightness",
+    "Contrast",
+    "Gaming_MJC_Lvl",
+    "Hue",
+    "Local_Contrast",
+    "MJC_Deblur",
+    "MJC_Dejudder",
+    "MJC_Effect",
+}
 
 SET_PICTURE_MODE_SCHEMA = vol.Schema(
     {
@@ -328,10 +342,10 @@ async def async_set_native_pq_value(
     key: str,
     value: str | int | float | bool,
 ) -> None:
-    """Set one MediaTek PQ key via setPqParamsByGlobal and refresh status."""
+    """Set one MediaTek PQ key and refresh status."""
     parsed_value = _parse_service_value(value)
     payload = json.dumps({key: parsed_value}, separators=(",", ":"))
-    command = _build_native_pq_set_global_command(payload)
+    command = _build_native_pq_set_command(key, payload)
 
     await hass.services.async_call(
         ANDROIDTV_DOMAIN,
@@ -387,6 +401,13 @@ def _build_broadcast_command(
     return " ".join(shlex.quote(part) for part in parts)
 
 
+def _build_native_pq_set_command(key: str, payload: str) -> str:
+    """Build a native MediaTek PQ service call for a single key."""
+    if key in _NATIVE_PQ_PERSTREAM_KEYS:
+        return _build_native_pq_set_perstream_command(payload)
+    return _build_native_pq_set_global_command(payload)
+
+
 def _build_native_pq_set_global_command(payload: str) -> str:
     """Build a native MediaTek PQ setPqParamsByGlobal service call."""
     parts = [
@@ -394,6 +415,21 @@ def _build_native_pq_set_global_command(payload: str) -> str:
         "call",
         PQ_SERVICE_NAME,
         str(PQ_SERVICE_CALL_SET_GLOBAL_TRANSACTION),
+        "s16",
+        payload,
+    ]
+    return " ".join(shlex.quote(part) for part in parts)
+
+
+def _build_native_pq_set_perstream_command(payload: str, pq_id: int = 0) -> str:
+    """Build a native MediaTek PQ setPqParams perstream service call."""
+    parts = [
+        "service",
+        "call",
+        PQ_SERVICE_NAME,
+        str(PQ_SERVICE_CALL_SET_PERSTREAM_TRANSACTION),
+        "i32",
+        str(pq_id),
         "s16",
         payload,
     ]

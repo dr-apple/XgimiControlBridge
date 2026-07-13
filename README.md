@@ -240,6 +240,12 @@ Wichtig: `select.xgimi_control_bridge_picture_mode` ist der alte XGIMI-Wrapper.
 Fuer HDR10/IMAX und die sichtbare MediaTek-PQ-Pipeline ist der native
 `select.*_native_pq_picture_mode` relevant.
 
+Ab `v0.1.11` nutzt die Integration zwei unterschiedliche native Schreibpfade:
+globale PQ-Werte wie `Gamma`, `Color_Temperature`, `Picture_Mode` und `Backlight`
+laufen ueber `setPqParamsByGlobal`; stream-/bildbezogene Werte wie
+`Brightness`, `Contrast`, `MJC_Effect`, `AI_PQ` und `Local_Contrast` laufen ueber
+`setPqParams(0, json)`.
+
 Zusaetzlich gibt es Status-Sensoren und einen Button zum manuellen Aktualisieren:
 
 ```text

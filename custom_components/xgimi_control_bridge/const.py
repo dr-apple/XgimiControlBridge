@@ -36,6 +36,7 @@ PQ_SERVICE_CALL_GET_GLOBAL_NON_AWARE = (
     "service call vendor.mediatek.hardware.pq.IPq/default 54 i32 0 i32 0"
 )
 PQ_SERVICE_CALL_SET_GLOBAL_TRANSACTION = 160
+PQ_SERVICE_CALL_SET_PERSTREAM_TRANSACTION = 159
 PQ_SERVICE_NAME = "vendor.mediatek.hardware.pq.IPq/default"
 
 PICTURE_MODES = [
