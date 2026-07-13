@@ -118,3 +118,53 @@ targets, but changing the embedded `Picture_Mode` did not change the visible
 OSD mode and readback stayed on `ImaxEnhanced`. The visible mode is likely held
 behind the privileged `com.mediatek.tv.settingspqdb` provider or an equivalent
 privileged `PqModeManager` path.
+
+## setMode Probe
+
+`DisplayModeSettingData` was reconstructed from
+`vendor.mediatek.hardware.pq-V1-ndk.so` as an AIDL parcelable with this payload:
+
+```text
+int32 parcelable_size
+int32 displayModeType
+int32 inputSourceType
+int32 outputVideoFormat
+bool  lowLatency
+int32 field4
+int32 field5
+```
+
+The Bridge APK exposes a diagnostic action:
+
+```bash
+scripts/xgimi_h20_adb.py -s 192.168.0.223:5555 bridge-pq-set-mode
+```
+
+Live result on Android 14:
+
+```text
+Command failed: java.lang.IllegalArgumentException parcel_backend=Parcel.obtain(IBinder)
+```
+
+The failure happens at `BinderProxy.transact(...)`, before
+`vendor.mediatek.hardware.pq-impl.so` logs `PQ::setMode`. In other words, a
+normal sideloaded APK cannot currently use this vendor Binder transaction even
+when the Java parcel is created with Android 14's binder-aware
+`Parcel.obtain(IBinder)` path.
+
+A shell-launched Java helper was also added to the APK and can be invoked with:
+
+```bash
+scripts/xgimi_h20_adb.py -s 192.168.0.223:5555 bridge-pq-set-mode-shell
+```
+
+Live result:
+
+```text
+app_process ... -> Error changing dalvik-cache ownership / Killed
+dalvikvm32 ...  -> ServiceManager native_get_int UnsatisfiedLinkError
+```
+
+So the next viable direct `setMode` path is a small native Android executable
+built with the NDK and run from ADB shell, or a privileged/system-signed bridge
+running in the same trust domain as MediaTek/XGIMI settings.
