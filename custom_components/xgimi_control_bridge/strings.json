@@ -46,9 +46,6 @@
       },
       "native_pq_memc": {
         "name": "Native PQ MEMC"
-      },
-      "native_pq_picture_mode": {
-        "name": "Native PQ picture mode"
       }
     }
   }
