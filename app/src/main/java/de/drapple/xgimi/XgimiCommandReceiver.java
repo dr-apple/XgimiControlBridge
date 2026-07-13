@@ -40,6 +40,10 @@ public final class XgimiCommandReceiver extends BroadcastReceiver {
     private static final String MIDDLEWARE_DESCRIPTOR =
             "com.xgimi.misckey.mw.IGtvMiddlewareInterface";
     private static final int MIDDLEWARE_EXECUTE_SYNC = 2;
+    private static final String PQ_SERVICE_NAME = "vendor.mediatek.hardware.pq.IPq/default";
+    private static final String PQ_DESCRIPTOR = "vendor.mediatek.hardware.pq.IPq";
+    private static final int PQ_SET_MODE_TRANSACTION = 146;
+    private static String lastParcelBackend = "unknown";
 
     private static final Map<String, String> PICTURE_FIELDS = new HashMap<>();
     private static final Map<String, String> MEMC_FIELDS = new HashMap<>();
@@ -97,6 +101,43 @@ public final class XgimiCommandReceiver extends BroadcastReceiver {
                 json.put("middleware_command", command);
                 json.put("payload", payload);
                 json.put("result", result.resultText);
+
+                setResultCode(1);
+                setResultData(json.toString());
+                Log.i(TAG, json.toString());
+                return;
+            }
+
+            if ("de.drapple.xgimi.PQ_SET_MODE".equals(action)) {
+                int pqId = intent.getIntExtra("pq_id", 0);
+                int displayModeType = intent.getIntExtra("display_mode_type", 0);
+                int inputSourceType = intent.getIntExtra("input_source_type", 0);
+                int outputVideoFormat = intent.getIntExtra("output_video_format", 0);
+                boolean lowLatency = intent.getBooleanExtra("low_latency", false);
+                int field4 = intent.getIntExtra("field4", 0);
+                int field5 = intent.getIntExtra("field5", 0);
+                int returnCode = setPqMode(
+                        pqId,
+                        displayModeType,
+                        inputSourceType,
+                        outputVideoFormat,
+                        lowLatency,
+                        field4,
+                        field5
+                );
+
+                JSONObject json = new JSONObject();
+                json.put("ok", true);
+                json.put("command", "pq_set_mode");
+                json.put("pq_id", pqId);
+                json.put("display_mode_type", displayModeType);
+                json.put("input_source_type", inputSourceType);
+                json.put("output_video_format", outputVideoFormat);
+                json.put("low_latency", lowLatency);
+                json.put("field4", field4);
+                json.put("field5", field5);
+                json.put("return_code", returnCode);
+                json.put("parcel_backend", lastParcelBackend);
 
                 setResultCode(1);
                 setResultData(json.toString());
@@ -318,7 +359,7 @@ public final class XgimiCommandReceiver extends BroadcastReceiver {
             throw new IllegalStateException("GtvMiddleware binder is not available via peekService");
         }
 
-        Parcel data = Parcel.obtain();
+        Parcel data = obtainParcelForBinder(binder);
         Parcel reply = Parcel.obtain();
         try {
             data.writeInterfaceToken(MIDDLEWARE_DESCRIPTOR);
@@ -335,6 +376,76 @@ public final class XgimiCommandReceiver extends BroadcastReceiver {
         } finally {
             reply.recycle();
             data.recycle();
+        }
+    }
+
+    private static int setPqMode(
+            int pqId,
+            int displayModeType,
+            int inputSourceType,
+            int outputVideoFormat,
+            boolean lowLatency,
+            int field4,
+            int field5
+    ) throws Exception {
+        Class<?> serviceManager = Class.forName("android.os.ServiceManager");
+        IBinder binder = (IBinder) serviceManager
+                .getMethod("getService", String.class)
+                .invoke(null, PQ_SERVICE_NAME);
+        if (binder == null) {
+            throw new IllegalStateException("Could not get service " + PQ_SERVICE_NAME);
+        }
+
+        Parcel data = obtainParcelForBinder(binder);
+        Parcel reply = Parcel.obtain();
+        try {
+            data.writeInterfaceToken(PQ_DESCRIPTOR);
+            data.writeInt(pqId);
+
+            int parcelableStart = data.dataPosition();
+            data.writeInt(0);
+            data.writeInt(displayModeType);
+            data.writeInt(inputSourceType);
+            data.writeInt(outputVideoFormat);
+            data.writeBoolean(lowLatency);
+            data.writeInt(field4);
+            data.writeInt(field5);
+            int parcelableEnd = data.dataPosition();
+            data.setDataPosition(parcelableStart);
+            data.writeInt(parcelableEnd - parcelableStart);
+            data.setDataPosition(parcelableEnd);
+
+            boolean transactOk = binder.transact(PQ_SET_MODE_TRANSACTION, data, reply, 0);
+            if (!transactOk) {
+                throw new IllegalStateException("IPq setMode transaction failed");
+            }
+            reply.readException();
+            return reply.readInt();
+        } finally {
+            reply.recycle();
+            data.recycle();
+        }
+    }
+
+    private static Parcel obtainParcelForBinder(IBinder binder) {
+        try {
+            Parcel parcel = (Parcel) Parcel.class
+                    .getMethod("obtain", IBinder.class)
+                    .invoke(null, binder);
+            lastParcelBackend = "Parcel.obtain(IBinder)";
+            return parcel;
+        } catch (Throwable ignored) {
+            Parcel parcel = Parcel.obtain();
+            try {
+                Parcel.class
+                        .getDeclaredMethod("markForBinder", IBinder.class)
+                        .invoke(parcel, binder);
+                lastParcelBackend = "Parcel.markForBinder(IBinder)";
+            } catch (Throwable markError) {
+                lastParcelBackend = "Parcel.obtain fallback: "
+                        + markError.getClass().getSimpleName();
+            }
+            return parcel;
         }
     }
 
@@ -436,6 +547,9 @@ public final class XgimiCommandReceiver extends BroadcastReceiver {
 
     private void fail(String message, Throwable error) {
         String detail = error == null ? message : message + ": " + error;
+        if (!"unknown".equals(lastParcelBackend)) {
+            detail = detail + " parcel_backend=" + lastParcelBackend;
+        }
         Log.e(TAG, detail, error);
         setResultCode(-1);
         setResultData(detail);

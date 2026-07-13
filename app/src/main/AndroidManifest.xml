@@ -28,6 +28,7 @@
                 <action android:name="de.drapple.xgimi.GET_PICTURE_JSON" />
                 <action android:name="de.drapple.xgimi.GET_EXT_PQ_SETTINGS" />
                 <action android:name="de.drapple.xgimi.MIDDLEWARE_EXEC_SYNC" />
+                <action android:name="de.drapple.xgimi.PQ_SET_MODE" />
             </intent-filter>
         </receiver>
 

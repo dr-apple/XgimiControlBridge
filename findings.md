@@ -421,3 +421,44 @@ global:    Backlight, Gamma, Color_Temperature, xgimiColorTemp,
 
 This is the first concrete native profile model that can cover brightness,
 MEMC, AI picture, gamma, and color temperature without DPAD/menu automation.
+
+## MediaTek `IPq.setMode` Binder Probe
+
+The native AIDL transaction for `vendor.mediatek.hardware.pq.IPq/default`
+`setMode(int, DisplayModeSettingData, out EN_RETURN_VALUE)` is transaction
+`146`. The `DisplayModeSettingData` parcelable was reconstructed from
+`vendor.mediatek.hardware.pq-V1-ndk.so` and implemented as a diagnostic Bridge
+APK action:
+
+```bash
+scripts/xgimi_h20_adb.py -s 192.168.0.223:5555 bridge-pq-set-mode
+```
+
+Live Android 14 result:
+
+```text
+Command failed: java.lang.IllegalArgumentException parcel_backend=Parcel.obtain(IBinder)
+```
+
+The exception is thrown by `BinderProxy.transact(...)` before the vendor PQ
+implementation logs `PQ::setMode`, so a normal sideloaded APK is blocked before
+the firmware receives the call.
+
+A Java shell helper inside the APK was also tested:
+
+```bash
+scripts/xgimi_h20_adb.py -s 192.168.0.223:5555 bridge-pq-set-mode-shell
+```
+
+Live shell result:
+
+```text
+app_process -> dalvik-cache ownership error / killed
+dalvikvm32  -> ServiceManager native runtime missing
+```
+
+Conclusion: the direct picture-mode path still likely lives at MediaTek
+`PqModeManager -> IPq.setMode`, but the next test needs either an Android NDK
+native executable run as ADB shell or a privileged/system-signed bridge. The
+normal Home Assistant sideloaded integration should continue to avoid exposing
+picture-mode controls until that path is confirmed.

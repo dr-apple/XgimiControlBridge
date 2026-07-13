@@ -20,6 +20,7 @@ PQ_SET_PQ_PARAMS_BY_GLOBAL_TRANSACTION = 0xA0
 BRIDGE_COMPONENT = "de.drapple.xgimi/.XgimiCommandReceiver"
 ACTION_GET_EXT_PQ_SETTINGS = "de.drapple.xgimi.GET_EXT_PQ_SETTINGS"
 ACTION_MIDDLEWARE_EXEC_SYNC = "de.drapple.xgimi.MIDDLEWARE_EXEC_SYNC"
+ACTION_PQ_SET_MODE = "de.drapple.xgimi.PQ_SET_MODE"
 
 
 def adb(args: list[str], *, dry_run: bool, serial: str | None = None) -> int:
@@ -302,6 +303,74 @@ def bridge_middleware_exec_sync(args: argparse.Namespace) -> int:
     return 0
 
 
+def bridge_pq_set_mode(args: argparse.Namespace) -> int:
+    params = [
+        "am",
+        "broadcast",
+        "-n",
+        BRIDGE_COMPONENT,
+        "-a",
+        ACTION_PQ_SET_MODE,
+        "--ei",
+        "pq_id",
+        str(args.pq_id),
+        "--ei",
+        "display_mode_type",
+        str(args.display_mode_type),
+        "--ei",
+        "input_source_type",
+        str(args.input_source_type),
+        "--ei",
+        "output_video_format",
+        str(args.output_video_format),
+        "--ez",
+        "low_latency",
+        "true" if args.low_latency else "false",
+        "--ei",
+        "field4",
+        str(args.field4),
+        "--ei",
+        "field5",
+        str(args.field5),
+    ]
+    if args.dry_run:
+        return adb(params, dry_run=True, serial=args.serial)
+    output = adb_output(params, serial=args.serial)
+    if not output:
+        return 1
+    print(output.strip())
+    return 0
+
+
+def bridge_pq_set_mode_shell(args: argparse.Namespace) -> int:
+    apk_path_output = adb_output(["pm", "path", "de.drapple.xgimi"], serial=args.serial)
+    apk_path = apk_path_output.strip().removeprefix("package:")
+    if not apk_path:
+        print("Bridge APK is not installed", file=sys.stderr)
+        return 1
+
+    params = [
+        "dalvikvm32",
+        "-cp",
+        apk_path,
+        "de.drapple.xgimi.PqSetModeTool",
+        str(args.pq_id),
+        str(args.display_mode_type),
+        str(args.input_source_type),
+        str(args.output_video_format),
+        "true" if args.low_latency else "false",
+        str(args.field4),
+        str(args.field5),
+    ]
+    if args.dry_run:
+        return adb(params, dry_run=True, serial=args.serial)
+    output = adb_output(params, serial=args.serial)
+    if not output:
+        return 1
+    print(output.strip())
+    return 0
+
+
 def raw_service(args: argparse.Namespace) -> int:
     return service_call(args.service, args.transaction, args.params, dry_run=args.dry_run, serial=args.serial)
 
@@ -381,6 +450,20 @@ def main(argv: list[str]) -> int:
     middleware.add_argument("--payload", default="", help="Optional middleware payload argument")
     middleware.set_defaults(func=bridge_middleware_exec_sync)
 
+    mode_probe = sub.add_parser(
+        "bridge-pq-set-mode",
+        help="Diagnostic Bridge APK call for MediaTek IPq setMode transaction 146",
+    )
+    add_pq_set_mode_args(mode_probe)
+    mode_probe.set_defaults(func=bridge_pq_set_mode)
+
+    mode_shell = sub.add_parser(
+        "bridge-pq-set-mode-shell",
+        help="Diagnostic dalvikvm32 shell call for MediaTek IPq setMode transaction 146",
+    )
+    add_pq_set_mode_args(mode_shell)
+    mode_shell.set_defaults(func=bridge_pq_set_mode_shell)
+
     raw = sub.add_parser("service-call", help="Execute a raw Android service call")
     raw.add_argument("service")
     raw.add_argument("transaction", type=int)
@@ -389,6 +472,16 @@ def main(argv: list[str]) -> int:
 
     args = parser.parse_args(argv)
     return args.func(args)
+
+
+def add_pq_set_mode_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--pq-id", type=int, default=0)
+    parser.add_argument("--display-mode-type", type=int, default=0)
+    parser.add_argument("--input-source-type", type=int, default=0)
+    parser.add_argument("--output-video-format", type=int, default=0)
+    parser.add_argument("--low-latency", action="store_true")
+    parser.add_argument("--field4", type=int, default=0)
+    parser.add_argument("--field5", type=int, default=0)
 
 
 if __name__ == "__main__":
