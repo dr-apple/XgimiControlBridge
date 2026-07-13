@@ -16,6 +16,8 @@ PQ_SET_HDR_TYPE_TRANSACTION = 0x8A
 PQ_GET_GLOBAL_NON_AWARE_TRANSACTION = 0x36
 PQ_SET_PQ_PARAMS_TRANSACTION = 0x9F
 PQ_SET_PQ_PARAMS_BY_GLOBAL_TRANSACTION = 0xA0
+BRIDGE_COMPONENT = "de.drapple.xgimi/.XgimiCommandReceiver"
+ACTION_GET_EXT_PQ_SETTINGS = "de.drapple.xgimi.GET_EXT_PQ_SETTINGS"
 
 
 def adb(args: list[str], *, dry_run: bool, serial: str | None = None) -> int:
@@ -187,6 +189,24 @@ def pq_set_params(args: argparse.Namespace) -> int:
     return service_call(PQ_SERVICE, transaction, params, dry_run=args.dry_run, serial=args.serial)
 
 
+def bridge_get_ext_pq_settings(args: argparse.Namespace) -> int:
+    params = [
+        "am",
+        "broadcast",
+        "-n",
+        BRIDGE_COMPONENT,
+        "-a",
+        ACTION_GET_EXT_PQ_SETTINGS,
+    ]
+    if args.dry_run:
+        return adb(params, dry_run=True, serial=args.serial)
+    output = adb_output(params, serial=args.serial)
+    if not output:
+        return 1
+    print(output.strip())
+    return 0
+
+
 def raw_service(args: argparse.Namespace) -> int:
     return service_call(args.service, args.transaction, args.params, dry_run=args.dry_run, serial=args.serial)
 
@@ -242,6 +262,12 @@ def main(argv: list[str]) -> int:
     pq_params.add_argument("--global-params", action="store_true")
     pq_params.add_argument("json")
     pq_params.set_defaults(func=pq_set_params)
+
+    ext_pq = sub.add_parser(
+        "bridge-get-ext-pq-settings",
+        help="Read MediaTek ExtService PQ settings through the bridge APK",
+    )
+    ext_pq.set_defaults(func=bridge_get_ext_pq_settings)
 
     raw = sub.add_parser("service-call", help="Execute a raw Android service call")
     raw.add_argument("service")

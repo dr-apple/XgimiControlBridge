@@ -16,6 +16,7 @@ from homeassistant.exceptions import HomeAssistantError
 import homeassistant.helpers.config_validation as cv
 
 from .const import (
+    ACTION_GET_EXT_PQ_SETTINGS,
     ACTION_GET_STATUS,
     ACTION_SET_MEMC,
     ACTION_SET_PICTURE_MODE,
@@ -155,6 +156,10 @@ def _async_register_services(hass: HomeAssistant) -> None:
         for entity_id in _entity_ids_from_call(call):
             await async_get_native_pq_status(hass, entity_id)
 
+    async def get_ext_pq_status(call: ServiceCall) -> None:
+        for entity_id in _entity_ids_from_call(call):
+            await async_get_ext_pq_status(hass, entity_id)
+
     if not hass.services.has_service(DOMAIN, "set_picture_mode"):
         hass.services.async_register(
             DOMAIN,
@@ -181,6 +186,13 @@ def _async_register_services(hass: HomeAssistant) -> None:
             DOMAIN,
             "get_native_pq_status",
             get_native_pq_status,
+            schema=GET_STATUS_SCHEMA,
+        )
+    if not hass.services.has_service(DOMAIN, "get_ext_pq_status"):
+        hass.services.async_register(
+            DOMAIN,
+            "get_ext_pq_status",
+            get_ext_pq_status,
             schema=GET_STATUS_SCHEMA,
         )
 
@@ -266,6 +278,11 @@ async def async_get_native_pq_status(hass: HomeAssistant, entity_id: str) -> Non
         pq_json,
         pq_settings,
     )
+
+
+async def async_get_ext_pq_status(hass: HomeAssistant, entity_id: str) -> None:
+    """Read MediaTek ExtService PQ status through the bridge APK."""
+    await async_send_bridge_command(hass, entity_id, ACTION_GET_EXT_PQ_SETTINGS)
 
 
 def _build_broadcast_command(
@@ -396,15 +413,7 @@ def _update_matching_entries_with_native_pq(
         status[ATTR_PQ_JSON] = pq_json
 
         if pq_settings:
-            status[ATTR_PQ_BACKLIGHT] = pq_settings.get("Backlight")
-            status[ATTR_PQ_BRIGHTNESS] = pq_settings.get("Brightness")
-            status[ATTR_PQ_CONTRAST] = pq_settings.get("Contrast")
-            status[ATTR_PQ_GAMMA] = pq_settings.get("Gamma")
-            status[ATTR_PQ_COLOR_TEMPERATURE] = pq_settings.get("Color_Temperature")
-            status[ATTR_PQ_AI_PICTURE] = pq_settings.get("AI_PQ")
-            status[ATTR_PQ_MEMC_EFFECT] = pq_settings.get("MJC_Effect")
-            status[ATTR_PQ_LOCAL_CONTRAST] = pq_settings.get("Local_Contrast")
-            status[ATTR_PQ_PICTURE_MODE] = pq_settings.get("Picture_Mode")
+            _apply_pq_settings_to_status(status, pq_settings)
 
         runtime_data["status"] = status
         async_dispatcher_send(hass, f"{SIGNAL_STATUS_UPDATED}_{entry_id}")
@@ -452,6 +461,12 @@ def _update_matching_entries(
                     status[ATTR_MEMC] = _name_from_value(
                         parsed_response["value"], MEMC_LEVEL_BY_VALUE
                     )
+            if parsed_response.get("command") == "ext_pq_settings":
+                pq_json = parsed_response.get("json_text")
+                pq_settings = _parse_json_object(pq_json)
+                status[ATTR_PQ_JSON] = pq_json
+                if pq_settings:
+                    _apply_pq_settings_to_status(status, pq_settings)
         else:
             status[ATTR_OK] = False
 
@@ -468,6 +483,19 @@ def _update_matching_entries(
 
         runtime_data["status"] = status
         async_dispatcher_send(hass, f"{SIGNAL_STATUS_UPDATED}_{entry_id}")
+
+
+def _apply_pq_settings_to_status(status: dict, pq_settings: dict) -> None:
+    """Copy known MediaTek PQ JSON keys into integration status."""
+    status[ATTR_PQ_BACKLIGHT] = pq_settings.get("Backlight")
+    status[ATTR_PQ_BRIGHTNESS] = pq_settings.get("Brightness")
+    status[ATTR_PQ_CONTRAST] = pq_settings.get("Contrast")
+    status[ATTR_PQ_GAMMA] = pq_settings.get("Gamma")
+    status[ATTR_PQ_COLOR_TEMPERATURE] = pq_settings.get("Color_Temperature")
+    status[ATTR_PQ_AI_PICTURE] = pq_settings.get("AI_PQ")
+    status[ATTR_PQ_MEMC_EFFECT] = pq_settings.get("MJC_Effect")
+    status[ATTR_PQ_LOCAL_CONTRAST] = pq_settings.get("Local_Contrast")
+    status[ATTR_PQ_PICTURE_MODE] = pq_settings.get("Picture_Mode")
 
 
 def _name_from_value(value: int | None, names: dict[int, str]) -> str | None:

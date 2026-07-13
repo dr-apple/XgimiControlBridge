@@ -1,9 +1,13 @@
 package de.drapple.xgimi;
 
 import android.content.BroadcastReceiver;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.ServiceConnection;
+import android.os.IBinder;
 import android.os.Bundle;
+import android.os.Parcel;
 import android.util.Log;
 
 import org.json.JSONObject;
@@ -13,6 +17,8 @@ import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Small bridge between ADB/Home Assistant broadcasts and XGIMI's private GmTvManager API.
@@ -24,6 +30,11 @@ public final class XgimiCommandReceiver extends BroadcastReceiver {
     private static final String TAG = "XgimiControlBridge";
     private static final String MANAGER_CLASS = "com.xgimi.gmpf.api.GmTvManager";
     private static final String VIDEO_MANAGER_CLASS = "com.xgimi.video.MstPictureManager";
+    private static final String EXT_PQ_ACTION = "PqService.remote";
+    private static final String EXT_PQ_PACKAGE = "com.mediatek.extservice";
+    private static final String EXT_PQ_DESCRIPTOR = "com.mediatek.extservice.IPqService";
+    private static final int EXT_PQ_GET_GLOBAL_SETTINGS = 17;
+    private static final long EXT_PQ_BIND_TIMEOUT_MS = 2500;
 
     private static final Map<String, String> PICTURE_FIELDS = new HashMap<>();
     private static final Map<String, String> MEMC_FIELDS = new HashMap<>();
@@ -52,6 +63,22 @@ public final class XgimiCommandReceiver extends BroadcastReceiver {
     public void onReceive(Context context, Intent intent) {
         final String action = intent.getAction();
         try {
+            if ("de.drapple.xgimi.GET_EXT_PQ_SETTINGS".equals(action)) {
+                ExtPqSettingsResult result = readExtPqSettings(context);
+
+                JSONObject json = new JSONObject();
+                json.put("ok", true);
+                json.put("command", "ext_pq_settings");
+                json.put("backend", "mediatek_extservice_ipq");
+                json.put("json_length", result.jsonText.length());
+                json.put("json_text", result.jsonText);
+
+                setResultCode(1);
+                setResultData(json.toString());
+                Log.i(TAG, json.toString());
+                return;
+            }
+
             Class<?> cls = Class.forName(MANAGER_CLASS);
             Object manager = cls.getMethod("getInstance").invoke(null);
             int source = intent.hasExtra("source")
@@ -174,6 +201,77 @@ public final class XgimiCommandReceiver extends BroadcastReceiver {
         int retCode = readIntMember(response, "getRetCode", "retCode");
         String jsonText = readStringMember(response, "getJsonText", "jsonText");
         return new PictureJsonResult(retCode, jsonText);
+    }
+
+    private static ExtPqSettingsResult readExtPqSettings(Context context) throws Exception {
+        Context appContext = context.getApplicationContext();
+        Intent serviceIntent = new Intent()
+                .setAction(EXT_PQ_ACTION)
+                .setPackage(EXT_PQ_PACKAGE);
+        final CountDownLatch connected = new CountDownLatch(1);
+        final IBinder[] binderRef = new IBinder[1];
+        final String[] disconnectReason = new String[1];
+
+        ServiceConnection connection = new ServiceConnection() {
+            @Override
+            public void onServiceConnected(ComponentName name, IBinder service) {
+                binderRef[0] = service;
+                connected.countDown();
+            }
+
+            @Override
+            public void onServiceDisconnected(ComponentName name) {
+                disconnectReason[0] = "Service disconnected: " + name;
+            }
+
+            @Override
+            public void onBindingDied(ComponentName name) {
+                disconnectReason[0] = "Binding died: " + name;
+                connected.countDown();
+            }
+
+            @Override
+            public void onNullBinding(ComponentName name) {
+                disconnectReason[0] = "Null binding: " + name;
+                connected.countDown();
+            }
+        };
+
+        boolean bound = appContext.bindService(serviceIntent, connection, Context.BIND_AUTO_CREATE);
+        if (!bound) {
+            throw new IllegalStateException("Could not bind " + EXT_PQ_PACKAGE + "/" + EXT_PQ_ACTION);
+        }
+
+        try {
+            if (!connected.await(EXT_PQ_BIND_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
+                throw new IllegalStateException("Timed out binding " + EXT_PQ_PACKAGE + "/" + EXT_PQ_ACTION);
+            }
+
+            IBinder binder = binderRef[0];
+            if (binder == null) {
+                throw new IllegalStateException(disconnectReason[0] == null
+                        ? "Service returned no binder"
+                        : disconnectReason[0]);
+            }
+
+            Parcel data = Parcel.obtain();
+            Parcel reply = Parcel.obtain();
+            try {
+                data.writeInterfaceToken(EXT_PQ_DESCRIPTOR);
+                boolean transactOk = binder.transact(EXT_PQ_GET_GLOBAL_SETTINGS, data, reply, 0);
+                if (!transactOk) {
+                    throw new IllegalStateException("IPqService transaction failed");
+                }
+                reply.readException();
+                String jsonText = reply.readString();
+                return new ExtPqSettingsResult(jsonText == null ? "" : jsonText);
+            } finally {
+                reply.recycle();
+                data.recycle();
+            }
+        } finally {
+            appContext.unbindService(connection);
+        }
     }
 
     private static Object getVideoManager() throws Exception {
@@ -302,6 +400,14 @@ public final class XgimiCommandReceiver extends BroadcastReceiver {
 
         PictureJsonResult(int retCode, String jsonText) {
             this.retCode = retCode;
+            this.jsonText = jsonText;
+        }
+    }
+
+    private static final class ExtPqSettingsResult {
+        final String jsonText;
+
+        ExtPqSettingsResult(String jsonText) {
             this.jsonText = jsonText;
         }
     }

@@ -20,6 +20,13 @@ Confirmed candidates:
   (`getGlobalNonAwarePqSetting`) returns active JSON for picture mode,
   brightness, backlight, gamma, color temperature, AI picture, MEMC/MJC, and
   local contrast.
+- ExtService PQ status: bridge APK action `GET_EXT_PQ_SETTINGS` binds
+  `com.mediatek.extservice` with `PqService.remote` and reads
+  `IPqService.getGlobalPqSettings()`. This mirrors the OSD-adjacent MediaTek
+  API layer and is exposed as `xgimi_control_bridge.get_ext_pq_status`.
+  Live testing shows the service requires the `signature|privileged`
+  `com.mediatek.tv.extservice.permission.USE_PQSERVICE` permission, so this is a
+  diagnostic path for normal sideloaded installs.
 - Picture/HDR/MEMC/color control: MediaTek `setPqParams*` and repository
   transactions are identified, but minimal JSON write patches currently return
   `return_code=3`; the exact firmware payload shape still needs reconstruction.

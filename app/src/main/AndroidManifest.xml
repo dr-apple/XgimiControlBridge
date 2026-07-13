@@ -20,6 +20,7 @@
                 <action android:name="de.drapple.xgimi.SET_MEMC" />
                 <action android:name="de.drapple.xgimi.GET_STATUS" />
                 <action android:name="de.drapple.xgimi.GET_PICTURE_JSON" />
+                <action android:name="de.drapple.xgimi.GET_EXT_PQ_SETTINGS" />
             </intent-filter>
         </receiver>
 

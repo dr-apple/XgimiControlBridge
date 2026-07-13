@@ -276,6 +276,57 @@ Interpretation: read access is solved. Write access likely needs the exact
 repository/target payload shape used by the MediaTek settings app, not a minimal
 single-key JSON patch.
 
+## MediaTek OSD API Layer
+
+`TvAgentService.apk` contains a higher-level Java AIDL wrapper that matches the
+way the Google TV picture OSD updates picture settings:
+
+```text
+com.mediatek.extservice.IPqService
+descriptor: com.mediatek.extservice.IPqService
+service package: com.mediatek.extservice
+bind action: PqService.remote
+```
+
+`TvVideoManager.createPqBinder()` binds that service and converts the returned
+`IBinder` with `IPqService.Stub.asInterface(...)`.
+
+Recovered OSD path:
+
+```text
+SourcePerstreamManager.updateToPqServiceBySource()
+  -> SourceBaseJson.getJsonStringBySource()
+  -> PackageUtils.getPackageName()
+  -> TvVideoManager.setPqRepositoryByPkg()
+  -> IPqService.setPqRepositoryByPkg()
+```
+
+This explains why the Google TV dashboard can change picture settings while the
+XGIMI wrapper calls do not affect the visible HDR10 pipeline. The OSD uses a
+privileged MediaTek repository API with full source/package-targeted JSON.
+
+Live package inspection confirms that `PqService.remote` is protected by:
+
+```text
+com.mediatek.tv.extservice.permission.USE_PQSERVICE
+protectionLevel: signature|privileged
+```
+
+The bridge `GET_EXT_PQ_SETTINGS` probe therefore fails on a normal sideloaded
+install with:
+
+```text
+SecurityException: Not allowed to bind to service Intent { act=PqService.remote pkg=com.mediatek.extservice }
+```
+
+Interpretation: this is the OSD API, but it is only directly usable from
+MediaTek/XGIMI-signed or privileged/system apps. For a normal Home Assistant
+install we still need either the lower-level `vendor.mediatek.hardware.pq.IPq`
+path with the full repository JSON payload or a privileged deployment path.
+
+See `docs/extservice_ipq.md` for the Java AIDL transaction map and the next
+bridge implementation target.
+
 ## Picture JSON Profile Model
 
 `GmTvManager.getPictureModeJson(int ePicMode, int reserved)` returns

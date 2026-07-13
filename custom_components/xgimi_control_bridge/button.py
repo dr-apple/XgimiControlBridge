@@ -8,6 +8,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import (
+    async_get_ext_pq_status,
     async_get_native_pq_status,
     async_send_bridge_command,
     config_entry_media_player_entity_id,
@@ -25,6 +26,7 @@ async def async_setup_entry(
         [
             XgimiRefreshStatusButton(entry),
             XgimiRefreshNativePqStatusButton(entry),
+            XgimiRefreshExtPqStatusButton(entry),
         ]
     )
 
@@ -85,3 +87,30 @@ class XgimiRefreshNativePqStatusButton(ButtonEntity):
     async def async_press(self) -> None:
         """Refresh status through the native MediaTek PQ service."""
         await async_get_native_pq_status(self.hass, self._media_player_entity_id)
+
+
+class XgimiRefreshExtPqStatusButton(ButtonEntity):
+    """Button that refreshes MediaTek ExtService PQ status."""
+
+    _attr_has_entity_name = True
+    _attr_name = "Refresh ExtService PQ Status"
+
+    def __init__(self, entry: ConfigEntry) -> None:
+        """Initialize the button entity."""
+        self._entry = entry
+        self._attr_unique_id = f"{entry.entry_id}_refresh_ext_pq_status"
+        self._media_player_entity_id = config_entry_media_player_entity_id(entry)
+
+    @property
+    def device_info(self):
+        """Return device information for the bridge controls."""
+        return {
+            "identifiers": {(DOMAIN, self._entry.entry_id)},
+            "name": "XGIMI Control Bridge",
+            "manufacturer": "XGIMI",
+            "model": "Control Bridge",
+        }
+
+    async def async_press(self) -> None:
+        """Refresh status through the MediaTek ExtService bridge path."""
+        await async_get_ext_pq_status(self.hass, self._media_player_entity_id)
