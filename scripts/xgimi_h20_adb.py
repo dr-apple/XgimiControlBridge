@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shlex
 import subprocess
 import sys
 
@@ -24,8 +25,9 @@ def adb(args: list[str], *, dry_run: bool, serial: str | None = None) -> int:
     cmd = ["adb"]
     if serial:
         cmd.extend(["-s", serial])
-    cmd.extend(["shell", *args])
-    print("+", " ".join(cmd))
+    shell_command = " ".join(shlex.quote(arg) for arg in args)
+    cmd.extend(["shell", shell_command])
+    print("+", " ".join(shlex.quote(part) for part in cmd))
     if dry_run:
         return 0
     return subprocess.call(cmd)
@@ -35,7 +37,8 @@ def adb_output(args: list[str], *, serial: str | None = None) -> str:
     cmd = ["adb"]
     if serial:
         cmd.extend(["-s", serial])
-    cmd.extend(["shell", *args])
+    shell_command = " ".join(shlex.quote(arg) for arg in args)
+    cmd.extend(["shell", shell_command])
     try:
         return subprocess.check_output(cmd, text=True, stderr=subprocess.STDOUT)
     except subprocess.CalledProcessError as err:
@@ -64,6 +67,17 @@ def service_call_output(
     serial: str | None = None,
 ) -> str:
     return adb_output(["service", "call", service, str(transaction), *params], serial=serial)
+
+
+def service_call_decoded_output(
+    service: str,
+    transaction: int,
+    params: list[str],
+    *,
+    serial: str | None = None,
+) -> tuple[str, list[int]]:
+    output = service_call_output(service, transaction, params, serial=serial)
+    return output, parse_service_call_words(output)
 
 
 def parse_service_call_words(output: str) -> list[int]:
@@ -178,6 +192,61 @@ def pq_get_global_settings(args: argparse.Namespace) -> int:
     return 0
 
 
+def read_global_settings(serial: str | None) -> tuple[int, int, dict]:
+    output, words = service_call_decoded_output(
+        PQ_SERVICE,
+        PQ_GET_GLOBAL_NON_AWARE_TRANSACTION,
+        ["i32", "0", "i32", "0"],
+        serial=serial,
+    )
+    decoded = decode_single_string_array(words)
+    if not decoded:
+        raise RuntimeError(f"Could not decode global PQ settings: {output.strip()}")
+
+    status, return_code, text = decoded
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as err:
+        raise RuntimeError(f"Could not parse global PQ JSON: {err}") from err
+    if not isinstance(data, dict):
+        raise RuntimeError("Global PQ settings payload is not a JSON object")
+    return status, return_code, data
+
+
+def parse_json_value(raw: str) -> object:
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        return raw
+
+
+def pq_set_current_global(args: argparse.Namespace) -> int:
+    status, return_code, data = read_global_settings(args.serial)
+    print(f"read: status={status} return_code={return_code} keys={len(data)}")
+
+    old_value = data.get(args.key)
+    new_value = parse_json_value(args.value)
+    data[args.key] = new_value
+    payload = json.dumps(data, separators=(",", ":"))
+
+    if args.dry_run:
+        print(f"{args.key}: {old_value!r} -> {new_value!r}")
+        print(payload)
+        return 0
+
+    output, words = service_call_decoded_output(
+        PQ_SERVICE,
+        PQ_SET_PQ_PARAMS_BY_GLOBAL_TRANSACTION,
+        ["s16", payload],
+        serial=args.serial,
+    )
+    print(output.strip())
+    if len(words) >= 2:
+        print(f"decoded: status={words[0]} return_code={words[1]}")
+    print(f"{args.key}: {old_value!r} -> {new_value!r}")
+    return 0
+
+
 def pq_set_params(args: argparse.Namespace) -> int:
     payload = args.json
     transaction = (
@@ -262,6 +331,14 @@ def main(argv: list[str]) -> int:
     pq_params.add_argument("--global-params", action="store_true")
     pq_params.add_argument("json")
     pq_params.set_defaults(func=pq_set_params)
+
+    pq_set_current = sub.add_parser(
+        "pq-set-current-global",
+        help="Read current global PQ JSON, change one key, and write the full JSON back",
+    )
+    pq_set_current.add_argument("key", help="PQ JSON key, for example Backlight")
+    pq_set_current.add_argument("value", help="New value parsed as JSON when possible")
+    pq_set_current.set_defaults(func=pq_set_current_global)
 
     ext_pq = sub.add_parser(
         "bridge-get-ext-pq-settings",

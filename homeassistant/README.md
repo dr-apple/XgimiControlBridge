@@ -20,6 +20,10 @@ Confirmed candidates:
   (`getGlobalNonAwarePqSetting`) returns active JSON for picture mode,
   brightness, backlight, gamma, color temperature, AI picture, MEMC/MJC, and
   local contrast.
+- Native PQ write: direct MediaTek `IPq` transaction `160`
+  (`setPqParamsByGlobal`) accepts correctly quoted minimal JSON patches.
+  Live confirmed with `Backlight` 40 -> 41 -> 40 and exposed as
+  `xgimi_control_bridge.set_native_pq_value`.
 - ExtService PQ status: bridge APK action `GET_EXT_PQ_SETTINGS` binds
   `com.mediatek.extservice` with `PqService.remote` and reads
   `IPqService.getGlobalPqSettings()`. This mirrors the OSD-adjacent MediaTek
@@ -27,6 +31,6 @@ Confirmed candidates:
   Live testing shows the service requires the `signature|privileged`
   `com.mediatek.tv.extservice.permission.USE_PQSERVICE` permission, so this is a
   diagnostic path for normal sideloaded installs.
-- Picture/HDR/MEMC/color control: MediaTek `setPqParams*` and repository
-  transactions are identified, but minimal JSON write patches currently return
-  `return_code=3`; the exact firmware payload shape still needs reconstruction.
+- Picture/HDR/MEMC/color control: keys present in the native JSON can now be
+  tested directly through `set_native_pq_value`; preset/repository APIs remain
+  useful for reconstructing named picture modes.

@@ -56,15 +56,22 @@ Local_Contrast=Off
 This read path is now used by the Home Assistant integration's
 `get_native_pq_status` service.
 
-Minimal write patches do not yet apply:
+Minimal write patches apply when the JSON string is correctly quoted through
+the Android shell:
 
 ```text
-0xa0 / 160 setPqParamsByGlobal({"Backlight":"50"}) -> return_code=3
-0x9f / 159 setPqParams(0, {"Brightness":"50"}) -> return_code=3
+0xa0 / 160 setPqParamsByGlobal({"Backlight":40}) -> status=0 return_code=0
 ```
 
-Next write target: reconstruct the full repository/target payload shape around
-`setPqParams*`, `setPqRepositoryById`, or `setPqRepositoryByPkg`.
+Live control test:
+
+```text
+Backlight 40 -> 41 -> 40
+readback after each write matched the requested value
+```
+
+The Home Assistant integration now exposes this through
+`xgimi_control_bridge.set_native_pq_value`.
 
 ## High-Value Transactions
 
