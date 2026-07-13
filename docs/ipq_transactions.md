@@ -56,6 +56,13 @@ Local_Contrast=Off
 This read path is now used by the Home Assistant integration's
 `get_native_pq_status` service.
 
+Important live finding: this `Picture_Mode` field is not the visible OSD picture
+mode. During a manual OSD switch from `Lebhaft` to `Spiel`, logcat reported
+`PqModeManager: getPQMode() called = Game`, while `getGlobalNonAwarePqSetting`
+continued to report `Picture_Mode=ImaxEnhanced`. Home Assistant therefore keeps
+this value only as a diagnostic sensor and no longer exposes it as a native
+picture-mode select from `v0.1.12` onward.
+
 Minimal write patches apply when the JSON string is correctly quoted through
 the Android shell:
 
@@ -103,3 +110,11 @@ The Home Assistant integration now exposes this through
 These are the first native candidates for direct HDR picture mode, MEMC,
 brightness, gamma, color temperature, HSY/color tuning, and AI picture without
 DPAD/menu automation.
+
+Full-profile repository writes were tested with transaction `165`
+`setPqRepositoryByPkg("com.mediatek.tv.settings", true, json)` and transaction
+`162` `setPqParamsByTarget(target, json)`. They returned success for several
+targets, but changing the embedded `Picture_Mode` did not change the visible
+OSD mode and readback stayed on `ImaxEnhanced`. The visible mode is likely held
+behind the privileged `com.mediatek.tv.settingspqdb` provider or an equivalent
+privileged `PqModeManager` path.

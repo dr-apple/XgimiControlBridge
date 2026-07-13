@@ -132,6 +132,26 @@ Interpretation: the original settings app likely updates PQ state through this
 provider. A sideloaded helper will only use this path if the MediaTek permission
 is grantable; otherwise we need direct `vendor.mediatek.hardware.pq.IPq/default`.
 
+## Visible Picture Mode vs Native PQ JSON
+
+`vendor.mediatek.hardware.pq.IPq/default` transaction `54`
+`getGlobalNonAwarePqSetting` returns a JSON field named `Picture_Mode`, but this
+field is not the visible OSD picture mode on the tested H20 firmware.
+
+Live OSD test:
+
+```text
+OSD before: Bildmodus = Lebhaft
+OSD after DPAD_RIGHT: Bildmodus = Spiel
+logcat: PqModeManager: getPQMode() called = Game
+native JSON before/after: Picture_Mode=ImaxEnhanced
+```
+
+Interpretation: the visible mode is managed by the MediaTek settings PQ model,
+not by the raw `Picture_Mode` field exposed through `getGlobalNonAwarePqSetting`.
+Starting with Home Assistant integration `v0.1.12`, this raw field remains only
+as a diagnostic sensor and is no longer exposed as a writable native PQ select.
+
 ## Picture Mode Storage Model
 
 `MiscKey.apk` contains `GamePictureModeEntity` with fields:
@@ -261,8 +281,8 @@ MJC_Effect=User
 Local_Contrast=Off
 ```
 
-This is the first confirmed native status path for the visible picture pipeline.
-It is now exposed in the Home Assistant integration through
+This is the first confirmed native status path for the MediaTek PQ stack. It is
+now exposed in the Home Assistant integration through
 `xgimi_control_bridge.get_native_pq_status` and native PQ sensors.
 
 Minimal JSON writes work once the JSON payload is correctly quoted through the

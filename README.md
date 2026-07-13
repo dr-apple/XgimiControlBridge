@@ -49,8 +49,10 @@ scripts/xgimi_h20_adb.py -s 192.168.0.223:5555 pq-get-global-settings
 
 Dieser liest direkt Werte wie `Picture_Mode`, `Backlight`, `Brightness`,
 `Gamma`, `Color_Temperature`, `AI_PQ`, `MJC_Effect` und `Local_Contrast`.
-Schreibzugriffe über `setPqParams*` sind gefunden, benötigen aber noch das
-exakte Firmware-Payload-Format.
+Wichtig: Der dort gelesene `Picture_Mode` ist nicht der sichtbare OSD-Bildmodus.
+Beim manuellen Wechsel von `Lebhaft` auf `Spiel` blieb der rohe native Wert auf
+`ImaxEnhanced`; der echte Bildmodus liegt in der geschuetzten MediaTek
+Settings-PQ-Datenbank beziehungsweise in der `PqModeManager`-Schicht.
 
 Zusätzlich ist jetzt die OSD-nahe Java-Schicht gefunden: Google TV bindet
 `com.mediatek.extservice` mit der Action `PqService.remote` und ruft
@@ -228,7 +230,6 @@ number.wohnzimmer_xgimi_control_bridge_native_pq_contrast
 Die nativen Bildoptionen liegen als eigene Dropdowns daneben:
 
 ```text
-select.wohnzimmer_xgimi_control_bridge_native_pq_picture_mode
 select.wohnzimmer_xgimi_control_bridge_native_pq_gamma
 select.wohnzimmer_xgimi_control_bridge_native_pq_color_temperature
 select.wohnzimmer_xgimi_control_bridge_native_pq_ai_picture
@@ -236,15 +237,16 @@ select.wohnzimmer_xgimi_control_bridge_native_pq_memc
 select.wohnzimmer_xgimi_control_bridge_native_pq_local_contrast
 ```
 
-Wichtig: `select.xgimi_control_bridge_picture_mode` ist der alte XGIMI-Wrapper.
-Fuer HDR10/IMAX und die sichtbare MediaTek-PQ-Pipeline ist der native
-`select.*_native_pq_picture_mode` relevant.
+Wichtig: `select.xgimi_control_bridge_picture_mode` ist der alte XGIMI-Wrapper
+und aendert den sichtbaren HDR10/IMAX-Bildmodus auf dem H20 nicht zuverlaessig.
+Der fruehere `select.*_native_pq_picture_mode` wurde ab `v0.1.12` entfernt,
+weil der native Rohwert `Picture_Mode` nicht dem sichtbaren OSD-Bildmodus
+entspricht. Der Wert bleibt als Diagnose-Sensor erhalten.
 
 Ab `v0.1.11` nutzt die Integration zwei unterschiedliche native Schreibpfade:
-globale PQ-Werte wie `Gamma`, `Color_Temperature`, `Picture_Mode` und `Backlight`
-laufen ueber `setPqParamsByGlobal`; stream-/bildbezogene Werte wie
-`Brightness`, `Contrast`, `MJC_Effect`, `AI_PQ` und `Local_Contrast` laufen ueber
-`setPqParams(0, json)`.
+globale PQ-Werte wie `Gamma`, `Color_Temperature` und `Backlight` laufen ueber
+`setPqParamsByGlobal`; stream-/bildbezogene Werte wie `Brightness`, `Contrast`,
+`MJC_Effect`, `AI_PQ` und `Local_Contrast` laufen ueber `setPqParams(0, json)`.
 
 Zusaetzlich gibt es Status-Sensoren und einen Button zum manuellen Aktualisieren:
 

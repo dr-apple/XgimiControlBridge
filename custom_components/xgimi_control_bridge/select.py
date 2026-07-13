@@ -24,7 +24,6 @@ from .const import (
     ATTR_PQ_GAMMA,
     ATTR_PQ_LOCAL_CONTRAST,
     ATTR_PQ_MEMC_EFFECT,
-    ATTR_PQ_PICTURE_MODE,
     DOMAIN,
     MEMC_LEVELS,
     PICTURE_MODES,
@@ -33,24 +32,6 @@ from .const import (
 
 
 NATIVE_PQ_SELECTS: tuple[dict[str, object], ...] = (
-    {
-        "key": "native_pq_picture_mode",
-        "name": "Native PQ Picture Mode",
-        "status_key": ATTR_PQ_PICTURE_MODE,
-        "pq_key": "Picture_Mode",
-        "options": [
-            "Standard",
-            "ImaxEnhanced",
-            "Movie",
-            "Film",
-            "Game",
-            "Sport",
-            "Sports",
-            "Bright",
-            "Office",
-            "User",
-        ],
-    },
     {
         "key": "native_pq_gamma",
         "name": "Native PQ Gamma",
