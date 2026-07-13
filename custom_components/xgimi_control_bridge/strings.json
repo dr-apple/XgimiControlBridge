@@ -14,6 +14,17 @@
     }
   },
   "entity": {
+    "number": {
+      "native_pq_backlight": {
+        "name": "Native PQ backlight"
+      },
+      "native_pq_brightness": {
+        "name": "Native PQ brightness"
+      },
+      "native_pq_contrast": {
+        "name": "Native PQ contrast"
+      }
+    },
     "select": {
       "picture_mode": {
         "name": "Picture mode"
