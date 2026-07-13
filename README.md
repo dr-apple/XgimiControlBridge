@@ -52,6 +52,18 @@ Dieser liest direkt Werte wie `Picture_Mode`, `Backlight`, `Brightness`,
 Schreibzugriffe über `setPqParams*` sind gefunden, benötigen aber noch das
 exakte Firmware-Payload-Format.
 
+Zusätzlich ist jetzt die OSD-nahe Java-Schicht gefunden: Google TV bindet
+`com.mediatek.extservice` mit der Action `PqService.remote` und ruft
+`com.mediatek.extservice.IPqService` auf. Besonders relevant ist
+`setPqRepositoryByPkg(packageName, enable, json)`, weil dieser Pfad full-profile
+JSON mit Source-/Paket-Ziel nutzt. Details stehen in `docs/extservice_ipq.md`.
+Die Bridge `0.1.7` enthält dafür den ersten vorsichtigen Lesetest:
+`de.drapple.xgimi.GET_EXT_PQ_SETTINGS`. Live getestet: der Dienst ist durch
+`com.mediatek.tv.extservice.permission.USE_PQSERVICE` geschützt
+(`signature|privileged`). Eine normal sideloaded APK kann ihn daher nicht direkt
+binden; der Pfad bleibt als Diagnose und für mögliche privilegierte Installationen
+dokumentiert.
+
 ## Bauen
 
 Projekt in Android Studio öffnen und **Build > Build APK(s)** wählen.
@@ -228,6 +240,7 @@ xgimi_control_bridge.set_picture_mode
 xgimi_control_bridge.set_memc
 xgimi_control_bridge.get_status
 xgimi_control_bridge.get_native_pq_status
+xgimi_control_bridge.get_ext_pq_status
 ```
 
 Beispiel Service-Aufruf:
@@ -244,6 +257,14 @@ Nativer MediaTek-PQ-Status:
 
 ```yaml
 action: xgimi_control_bridge.get_native_pq_status
+target:
+  entity_id: media_player.xgimi_h20
+```
+
+OSD-nahe ExtService-PQ-Schicht:
+
+```yaml
+action: xgimi_control_bridge.get_ext_pq_status
 target:
   entity_id: media_player.xgimi_h20
 ```

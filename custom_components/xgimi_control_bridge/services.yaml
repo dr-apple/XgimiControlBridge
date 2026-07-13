@@ -81,3 +81,10 @@ get_native_pq_status:
   target:
     entity:
       domain: media_player
+
+get_ext_pq_status:
+  name: Get ExtService PQ status
+  description: Read MediaTek PQ status through the bridge APK and the OSD-adjacent ExtService path.
+  target:
+    entity:
+      domain: media_player

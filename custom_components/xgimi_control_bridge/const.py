@@ -30,6 +30,7 @@ BRIDGE_COMPONENT = "de.drapple.xgimi/.XgimiCommandReceiver"
 ACTION_SET_PICTURE_MODE = "de.drapple.xgimi.SET_PICTURE_MODE"
 ACTION_SET_MEMC = "de.drapple.xgimi.SET_MEMC"
 ACTION_GET_STATUS = "de.drapple.xgimi.GET_STATUS"
+ACTION_GET_EXT_PQ_SETTINGS = "de.drapple.xgimi.GET_EXT_PQ_SETTINGS"
 
 PQ_SERVICE_CALL_GET_GLOBAL_NON_AWARE = (
     "service call vendor.mediatek.hardware.pq.IPq/default 54 i32 0 i32 0"
