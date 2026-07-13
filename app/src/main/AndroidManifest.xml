@@ -1,6 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <uses-permission android:name="com.xgimi.misckey.permission.GTV_MIDDLEWARE_SERVICE" />
+
+    <queries>
+        <package android:name="com.xgimi.misckey" />
+    </queries>
+
     <application
         android:allowBackup="false"
         android:label="XGIMI Control Bridge"
@@ -21,6 +27,7 @@
                 <action android:name="de.drapple.xgimi.GET_STATUS" />
                 <action android:name="de.drapple.xgimi.GET_PICTURE_JSON" />
                 <action android:name="de.drapple.xgimi.GET_EXT_PQ_SETTINGS" />
+                <action android:name="de.drapple.xgimi.MIDDLEWARE_EXEC_SYNC" />
             </intent-filter>
         </receiver>
 

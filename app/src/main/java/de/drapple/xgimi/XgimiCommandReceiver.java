@@ -35,6 +35,11 @@ public final class XgimiCommandReceiver extends BroadcastReceiver {
     private static final String EXT_PQ_DESCRIPTOR = "com.mediatek.extservice.IPqService";
     private static final int EXT_PQ_GET_GLOBAL_SETTINGS = 17;
     private static final long EXT_PQ_BIND_TIMEOUT_MS = 2500;
+    private static final String MIDDLEWARE_ACTION = "com.xgimi.misckey.GTV_MIDDLEWARE_SERVICE";
+    private static final String MIDDLEWARE_PACKAGE = "com.xgimi.misckey";
+    private static final String MIDDLEWARE_DESCRIPTOR =
+            "com.xgimi.misckey.mw.IGtvMiddlewareInterface";
+    private static final int MIDDLEWARE_EXECUTE_SYNC = 2;
 
     private static final Map<String, String> PICTURE_FIELDS = new HashMap<>();
     private static final Map<String, String> MEMC_FIELDS = new HashMap<>();
@@ -72,6 +77,26 @@ public final class XgimiCommandReceiver extends BroadcastReceiver {
                 json.put("backend", "mediatek_extservice_ipq");
                 json.put("json_length", result.jsonText.length());
                 json.put("json_text", result.jsonText);
+
+                setResultCode(1);
+                setResultData(json.toString());
+                Log.i(TAG, json.toString());
+                return;
+            }
+
+            if ("de.drapple.xgimi.MIDDLEWARE_EXEC_SYNC".equals(action)) {
+                String type = getStringExtra(intent, "type", "");
+                String command = getStringExtra(intent, "command", "");
+                String payload = getStringExtra(intent, "payload", "");
+                MiddlewareResult result = executeMiddlewareSync(this, context, type, command, payload);
+
+                JSONObject json = new JSONObject();
+                json.put("ok", true);
+                json.put("command", "middleware_exec_sync");
+                json.put("type", type);
+                json.put("middleware_command", command);
+                json.put("payload", payload);
+                json.put("result", result.resultText);
 
                 setResultCode(1);
                 setResultData(json.toString());
@@ -274,6 +299,45 @@ public final class XgimiCommandReceiver extends BroadcastReceiver {
         }
     }
 
+    private static MiddlewareResult executeMiddlewareSync(
+            BroadcastReceiver receiver,
+            Context context,
+            String type,
+            String command,
+            String payload
+    ) throws Exception {
+        if (command == null || command.trim().isEmpty()) {
+            throw new IllegalArgumentException("Missing --es command NAME");
+        }
+
+        Intent serviceIntent = new Intent()
+                .setAction(MIDDLEWARE_ACTION)
+                .setPackage(MIDDLEWARE_PACKAGE);
+        IBinder binder = receiver.peekService(context, serviceIntent);
+        if (binder == null) {
+            throw new IllegalStateException("GtvMiddleware binder is not available via peekService");
+        }
+
+        Parcel data = Parcel.obtain();
+        Parcel reply = Parcel.obtain();
+        try {
+            data.writeInterfaceToken(MIDDLEWARE_DESCRIPTOR);
+            data.writeString(type == null ? "" : type);
+            data.writeString(command);
+            data.writeString(payload == null ? "" : payload);
+            boolean transactOk = binder.transact(MIDDLEWARE_EXECUTE_SYNC, data, reply, 0);
+            if (!transactOk) {
+                throw new IllegalStateException("GtvMiddleware executeSync transaction failed");
+            }
+            reply.readException();
+            String resultText = reply.readString();
+            return new MiddlewareResult(resultText == null ? "" : resultText);
+        } finally {
+            reply.recycle();
+            data.recycle();
+        }
+    }
+
     private static Object getVideoManager() throws Exception {
         Class<?> videoClass = Class.forName(VIDEO_MANAGER_CLASS);
         return videoClass.getMethod("getInstance").invoke(null);
@@ -348,6 +412,11 @@ public final class XgimiCommandReceiver extends BroadcastReceiver {
         }
     }
 
+    private static String getStringExtra(Intent intent, String name, String defaultValue) {
+        String value = intent.getStringExtra(name);
+        return value == null ? defaultValue : value;
+    }
+
     private void success(String command, int source, int value, CommandResult result) {
         try {
             JSONObject json = new JSONObject();
@@ -409,6 +478,14 @@ public final class XgimiCommandReceiver extends BroadcastReceiver {
 
         ExtPqSettingsResult(String jsonText) {
             this.jsonText = jsonText;
+        }
+    }
+
+    private static final class MiddlewareResult {
+        final String resultText;
+
+        MiddlewareResult(String resultText) {
+            this.resultText = resultText;
         }
     }
 }

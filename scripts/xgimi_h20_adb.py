@@ -19,6 +19,7 @@ PQ_SET_PQ_PARAMS_TRANSACTION = 0x9F
 PQ_SET_PQ_PARAMS_BY_GLOBAL_TRANSACTION = 0xA0
 BRIDGE_COMPONENT = "de.drapple.xgimi/.XgimiCommandReceiver"
 ACTION_GET_EXT_PQ_SETTINGS = "de.drapple.xgimi.GET_EXT_PQ_SETTINGS"
+ACTION_MIDDLEWARE_EXEC_SYNC = "de.drapple.xgimi.MIDDLEWARE_EXEC_SYNC"
 
 
 def adb(args: list[str], *, dry_run: bool, serial: str | None = None) -> int:
@@ -276,6 +277,31 @@ def bridge_get_ext_pq_settings(args: argparse.Namespace) -> int:
     return 0
 
 
+def bridge_middleware_exec_sync(args: argparse.Namespace) -> int:
+    params = [
+        "am",
+        "broadcast",
+        "-n",
+        BRIDGE_COMPONENT,
+        "-a",
+        ACTION_MIDDLEWARE_EXEC_SYNC,
+        "--es",
+        "command",
+        args.middleware_command,
+    ]
+    if args.type:
+        params.extend(["--es", "type", args.type])
+    if args.payload:
+        params.extend(["--es", "payload", args.payload])
+    if args.dry_run:
+        return adb(params, dry_run=True, serial=args.serial)
+    output = adb_output(params, serial=args.serial)
+    if not output:
+        return 1
+    print(output.strip())
+    return 0
+
+
 def raw_service(args: argparse.Namespace) -> int:
     return service_call(args.service, args.transaction, args.params, dry_run=args.dry_run, serial=args.serial)
 
@@ -345,6 +371,15 @@ def main(argv: list[str]) -> int:
         help="Read MediaTek ExtService PQ settings through the bridge APK",
     )
     ext_pq.set_defaults(func=bridge_get_ext_pq_settings)
+
+    middleware = sub.add_parser(
+        "bridge-middleware-exec-sync",
+        help="Call XGIMI MiscKey GtvMiddlewareService executeSync through the bridge APK",
+    )
+    middleware.add_argument("middleware_command", help="Middleware command, for example getBoostEnable")
+    middleware.add_argument("--type", default="", help="Optional middleware type argument")
+    middleware.add_argument("--payload", default="", help="Optional middleware payload argument")
+    middleware.set_defaults(func=bridge_middleware_exec_sync)
 
     raw = sub.add_parser("service-call", help="Execute a raw Android service call")
     raw.add_argument("service")

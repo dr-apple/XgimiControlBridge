@@ -152,6 +152,57 @@ not by the raw `Picture_Mode` field exposed through `getGlobalNonAwarePqSetting`
 Starting with Home Assistant integration `v0.1.12`, this raw field remains only
 as a diagnostic sensor and is no longer exposed as a writable native PQ select.
 
+## XGIMI MiscKey Middleware
+
+`com.xgimi.misckey` is a persistent system app with the protected MediaTek PQ
+database permissions. It exposes:
+
+```text
+com.xgimi.misckey/.service.GtvMiddlewareService
+action: com.xgimi.misckey.GTV_MIDDLEWARE_SERVICE
+permission: com.xgimi.misckey.permission.GTV_MIDDLEWARE_SERVICE
+protectionLevel: normal
+```
+
+The AIDL interface is:
+
+```text
+com.xgimi.misckey.mw.IGtvMiddlewareInterface
+execute(type, command, payload): boolean
+executeSync(type, command, payload): string
+registerCallBack(type, callback)
+unRegisterCallBack(type, callback)
+```
+
+Bridge APK `0.1.9` adds a diagnostic action:
+
+```bash
+adb shell am broadcast -n de.drapple.xgimi/.XgimiCommandReceiver \
+  -a de.drapple.xgimi.MIDDLEWARE_EXEC_SYNC \
+  --es command getBoostEnable
+```
+
+Confirmed working:
+
+```text
+getBoostEnable -> false
+getALOnOff -> false
+```
+
+Picture-mode probes returned an empty result:
+
+```text
+getPQMode -> ""
+queryPQMode -> ""
+getPictureMode -> ""
+getImageMode -> ""
+```
+
+Interpretation: the public MiscKey middleware is reachable from a sideloaded
+app, but the visible picture mode is not currently exposed through the known
+middleware commands. This still makes the middleware useful as a future
+diagnostic/proxy path.
+
 ## Picture Mode Storage Model
 
 `MiscKey.apk` contains `GamePictureModeEntity` with fields:
