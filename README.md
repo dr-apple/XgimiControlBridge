@@ -225,6 +225,21 @@ number.wohnzimmer_xgimi_control_bridge_native_pq_brightness
 number.wohnzimmer_xgimi_control_bridge_native_pq_contrast
 ```
 
+Die nativen Bildoptionen liegen als eigene Dropdowns daneben:
+
+```text
+select.wohnzimmer_xgimi_control_bridge_native_pq_picture_mode
+select.wohnzimmer_xgimi_control_bridge_native_pq_gamma
+select.wohnzimmer_xgimi_control_bridge_native_pq_color_temperature
+select.wohnzimmer_xgimi_control_bridge_native_pq_ai_picture
+select.wohnzimmer_xgimi_control_bridge_native_pq_memc
+select.wohnzimmer_xgimi_control_bridge_native_pq_local_contrast
+```
+
+Wichtig: `select.xgimi_control_bridge_picture_mode` ist der alte XGIMI-Wrapper.
+Fuer HDR10/IMAX und die sichtbare MediaTek-PQ-Pipeline ist der native
+`select.*_native_pq_picture_mode` relevant.
+
 Zusaetzlich gibt es Status-Sensoren und einen Button zum manuellen Aktualisieren:
 
 ```text

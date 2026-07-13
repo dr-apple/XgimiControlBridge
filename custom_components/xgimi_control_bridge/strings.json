@@ -31,6 +31,24 @@
       },
       "memc": {
         "name": "MEMC"
+      },
+      "native_pq_ai_picture": {
+        "name": "Native PQ AI picture"
+      },
+      "native_pq_color_temperature": {
+        "name": "Native PQ color temperature"
+      },
+      "native_pq_gamma": {
+        "name": "Native PQ gamma"
+      },
+      "native_pq_local_contrast": {
+        "name": "Native PQ local contrast"
+      },
+      "native_pq_memc": {
+        "name": "Native PQ MEMC"
+      },
+      "native_pq_picture_mode": {
+        "name": "Native PQ picture mode"
       }
     }
   }
