@@ -14,6 +14,38 @@
     }
   },
   "entity": {
+    "button": {
+      "autofocus": {
+        "name": "Autofocus"
+      },
+      "osd_back": {
+        "name": "OSD back"
+      },
+      "osd_confirm": {
+        "name": "OSD confirm"
+      },
+      "osd_picture_mode_next": {
+        "name": "Picture mode next"
+      },
+      "osd_picture_mode_open": {
+        "name": "Open picture mode OSD"
+      },
+      "osd_picture_mode_previous": {
+        "name": "Picture mode previous"
+      },
+      "refresh_all_status": {
+        "name": "Refresh all status"
+      },
+      "refresh_ext_pq_status": {
+        "name": "Refresh ExtService PQ status"
+      },
+      "refresh_native_pq_status": {
+        "name": "Refresh native PQ status"
+      },
+      "refresh_status": {
+        "name": "Refresh status"
+      }
+    },
     "number": {
       "native_pq_backlight": {
         "name": "Native PQ backlight"
@@ -26,9 +58,6 @@
       }
     },
     "select": {
-      "picture_mode": {
-        "name": "Picture mode"
-      },
       "memc": {
         "name": "MEMC"
       },
@@ -46,6 +75,92 @@
       },
       "native_pq_memc": {
         "name": "Native PQ MEMC"
+      }
+    },
+    "sensor": {
+      "last_action": {
+        "name": "Last action"
+      },
+      "last_adb_response": {
+        "name": "Last ADB response"
+      },
+      "last_ok": {
+        "name": "Last command OK"
+      },
+      "memc": {
+        "name": "MEMC"
+      },
+      "picture_mode": {
+        "name": "Picture mode status"
+      },
+      "pq_ai_picture": {
+        "name": "Native PQ AI picture"
+      },
+      "pq_backlight": {
+        "name": "Native PQ backlight"
+      },
+      "pq_brightness": {
+        "name": "Native PQ brightness"
+      },
+      "pq_color_space": {
+        "name": "Native PQ color space"
+      },
+      "pq_color_temperature": {
+        "name": "Native PQ color temperature"
+      },
+      "pq_contrast": {
+        "name": "Native PQ contrast"
+      },
+      "pq_dark_detail": {
+        "name": "Native PQ dark detail"
+      },
+      "pq_dynamic_color_booster": {
+        "name": "Native PQ dynamic color booster"
+      },
+      "pq_film_mode": {
+        "name": "Native PQ film mode"
+      },
+      "pq_gamma": {
+        "name": "Native PQ gamma"
+      },
+      "pq_global_dimming": {
+        "name": "Native PQ global dimming"
+      },
+      "pq_hdr_mode": {
+        "name": "Native PQ HDR mode"
+      },
+      "pq_hdr_type": {
+        "name": "Native PQ HDR type"
+      },
+      "pq_hue": {
+        "name": "Native PQ hue"
+      },
+      "pq_json": {
+        "name": "Native PQ JSON"
+      },
+      "pq_local_contrast": {
+        "name": "Native PQ local contrast"
+      },
+      "pq_low_latency": {
+        "name": "Native PQ low latency"
+      },
+      "pq_memc_effect": {
+        "name": "Native PQ MEMC"
+      },
+      "pq_mpeg_nr": {
+        "name": "Native PQ MPEG NR"
+      },
+      "pq_nr": {
+        "name": "Native PQ NR"
+      },
+      "pq_picture_mode": {
+        "name": "Native PQ picture mode status"
+      },
+      "pq_saturation": {
+        "name": "Native PQ saturation"
+      },
+      "source": {
+        "name": "Source"
       }
     }
   }

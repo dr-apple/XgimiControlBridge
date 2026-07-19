@@ -462,3 +462,45 @@ Conclusion: the direct picture-mode path still likely lives at MediaTek
 native executable run as ADB shell or a privileged/system-signed bridge. The
 normal Home Assistant sideloaded integration should continue to avoid exposing
 picture-mode controls until that path is confirmed.
+
+## Native `xgimi-pq-tool` Result
+
+`v0.1.15` adds the NDK-built `dist/native/xgimi-pq-tool-armeabi-v7a` helper and
+ADB wrappers:
+
+```bash
+scripts/xgimi_h20_adb.py -s 192.168.0.223:5555 native-pq-tool-push
+scripts/xgimi_h20_adb.py -s 192.168.0.223:5555 native-pq-get-hdr-type --pq-id 0
+scripts/xgimi_h20_adb.py -s 192.168.0.223:5555 native-pq-set-mode --display-mode-type 30
+```
+
+Confirmed live:
+
+```text
+native-pq-get-hdr-type -> return_code=0 hdr_type=1
+```
+
+The native helper solved two earlier blockers:
+
+```text
+normal APK BinderProxy.transact -> IllegalArgumentException
+Java shell helper             -> app_process/dalvik runtime blocked
+native shell helper           -> can talk to vendor.mediatek.hardware.pq.IPq/default
+```
+
+The key ABI detail is that MediaTek's NDK-AIDL service expects placeholder
+values for `out` parameters in the input parcel. Without those placeholders,
+even known-good transactions fail with `STATUS_NOT_ENOUGH_DATA`.
+
+Current `setMode` scan:
+
+```text
+displayModeType 0..3 -> STATUS_BAD_VALUE
+displayModeType 4..29,31..40 -> return_code=3
+displayModeType 30 -> return_code=0 once, return_code=3 on repeat
+```
+
+This proves direct native Binder access is possible, but the visible HDR10
+Picture Mode is still not solved. The next target is the real runtime tuple for
+`DisplayModeSettingData`: `displayModeType`, `inputSourceType`,
+`outputVideoFormat`, `lowLatency`, and the two remaining fields.

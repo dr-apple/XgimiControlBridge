@@ -237,8 +237,9 @@ select.wohnzimmer_xgimi_control_bridge_native_pq_memc
 select.wohnzimmer_xgimi_control_bridge_native_pq_local_contrast
 ```
 
-Wichtig: `select.xgimi_control_bridge_picture_mode` ist der alte XGIMI-Wrapper
-und aendert den sichtbaren HDR10/IMAX-Bildmodus auf dem H20 nicht zuverlaessig.
+Wichtig: Der alte direkte `select.xgimi_control_bridge_picture_mode` wird nicht
+mehr als Standard-Entity angelegt. Der XGIMI-Wrapper aendert den sichtbaren
+HDR10/IMAX-Bildmodus auf dem H20 nicht zuverlaessig.
 Der fruehere `select.*_native_pq_picture_mode` wurde ab `v0.1.12` entfernt,
 weil der native Rohwert `Picture_Mode` nicht dem sichtbaren OSD-Bildmodus
 entspricht. Der Wert bleibt als Diagnose-Sensor erhalten.
@@ -248,30 +249,50 @@ globale PQ-Werte wie `Gamma`, `Color_Temperature` und `Backlight` laufen ueber
 `setPqParamsByGlobal`; stream-/bildbezogene Werte wie `Brightness`, `Contrast`,
 `MJC_Effect`, `AI_PQ` und `Local_Contrast` laufen ueber `setPqParams(0, json)`.
 
-Zusaetzlich gibt es Status-Sensoren und einen Button zum manuellen Aktualisieren:
+Zusaetzlich gibt es Status-Sensoren und Buttons zum manuellen Aktualisieren:
 
 ```text
+button.xgimi_control_bridge_refresh_all_status
 button.xgimi_control_bridge_refresh_status
 button.xgimi_control_bridge_refresh_native_pq_status
+button.xgimi_control_bridge_autofocus
+button.xgimi_control_bridge_open_picture_mode_osd
+button.xgimi_control_bridge_picture_mode_previous
+button.xgimi_control_bridge_picture_mode_next
+button.xgimi_control_bridge_osd_confirm
+button.xgimi_control_bridge_osd_back
 sensor.xgimi_control_bridge_picture_mode
 sensor.xgimi_control_bridge_memc
 sensor.xgimi_control_bridge_source
+sensor.xgimi_control_bridge_native_pq_hdr_type
 sensor.xgimi_control_bridge_native_pq_backlight
 sensor.xgimi_control_bridge_native_pq_brightness
 sensor.xgimi_control_bridge_native_pq_contrast
+sensor.xgimi_control_bridge_native_pq_saturation
+sensor.xgimi_control_bridge_native_pq_hue
 sensor.xgimi_control_bridge_native_pq_gamma
 sensor.xgimi_control_bridge_native_pq_color_temperature
 sensor.xgimi_control_bridge_native_pq_ai_picture
+sensor.xgimi_control_bridge_native_pq_hdr_mode
+sensor.xgimi_control_bridge_native_pq_color_space
 sensor.xgimi_control_bridge_native_pq_memc
+sensor.xgimi_control_bridge_native_pq_nr
+sensor.xgimi_control_bridge_native_pq_mpeg_nr
 sensor.xgimi_control_bridge_native_pq_local_contrast
+sensor.xgimi_control_bridge_native_pq_low_latency
+sensor.xgimi_control_bridge_native_pq_global_dimming
+sensor.xgimi_control_bridge_native_pq_dark_detail
+sensor.xgimi_control_bridge_native_pq_dynamic_color_booster
+sensor.xgimi_control_bridge_native_pq_film_mode
 sensor.xgimi_control_bridge_native_pq_picture_mode
+sensor.xgimi_control_bridge_last_action
 sensor.xgimi_control_bridge_last_command_ok
 sensor.xgimi_control_bridge_last_adb_response
 ```
 
 Der Status wird aus dem `adb_response`-Attribut der Android-TV-ADB-Entity gelesen.
 Wenn Steuerung oder Status nicht funktionieren, zuerst den Button
-**Refresh Native PQ Status** druecken und danach die nativen Sensoren pruefen.
+**Refresh All Status** druecken und danach die nativen Sensoren pruefen.
 Der Roh-ADB-Sensor wird absichtlich gekuerzt, damit Home Assistant keine zu grossen
 Recorder-Attribute speichert.
 
@@ -282,18 +303,35 @@ xgimi_control_bridge.set_picture_mode
 xgimi_control_bridge.set_memc
 xgimi_control_bridge.get_status
 xgimi_control_bridge.get_native_pq_status
+xgimi_control_bridge.get_native_hdr_type
 xgimi_control_bridge.set_native_pq_value
 xgimi_control_bridge.get_ext_pq_status
+xgimi_control_bridge.autofocus
+xgimi_control_bridge.open_picture_mode_osd
+xgimi_control_bridge.osd_picture_mode_previous
+xgimi_control_bridge.osd_picture_mode_next
+xgimi_control_bridge.osd_confirm
+xgimi_control_bridge.osd_back
 ```
 
-Beispiel Service-Aufruf:
+Empfohlener OSD-Ablauf fuer den sichtbaren Bildmodus:
 
 ```yaml
-action: xgimi_control_bridge.set_picture_mode
+action: xgimi_control_bridge.open_picture_mode_osd
 target:
   entity_id: media_player.xgimi_h20
-data:
-  mode: movie
+```
+
+Danach mit `xgimi_control_bridge.osd_picture_mode_next` oder
+`xgimi_control_bridge.osd_picture_mode_previous` umschalten und mit
+`xgimi_control_bridge.osd_back` wieder schliessen.
+
+Autofokus:
+
+```yaml
+action: xgimi_control_bridge.autofocus
+target:
+  entity_id: media_player.xgimi_h20
 ```
 
 Nativer MediaTek-PQ-Status:
@@ -338,6 +376,24 @@ Die naheliegenden Picture-Mode-Kommandos `getPQMode`, `queryPQMode`,
 `getPictureMode` und `getImageMode` liefern derzeit leer zurueck; der sichtbare
 Bildmodus ist also auch ueber diesen oeffentlichen Middleware-Eingang noch nicht
 freigelegt.
+
+### Native MediaTek PQ Diagnose
+
+Ab `v0.1.15` gibt es zusaetzlich ein natives `armeabi-v7a` Shell-Werkzeug fuer
+den MediaTek-PQ-Binder. Es laeuft per ADB-Shell und umgeht damit die
+Beschraenkung, die normale sideloaded APKs bei `IPq.setMode` trifft:
+
+```bash
+native/build_xgimi_pq_tool.sh
+scripts/xgimi_h20_adb.py -s 192.168.0.223:5555 native-pq-tool-push
+scripts/xgimi_h20_adb.py -s 192.168.0.223:5555 native-pq-get-hdr-type --pq-id 0
+scripts/xgimi_h20_adb.py -s 192.168.0.223:5555 native-pq-set-mode --display-mode-type 30
+```
+
+Live bestaetigt: `native-pq-get-hdr-type` liest den Vendor-Binder erfolgreich.
+`native-pq-set-mode` erreicht Returncodes, hat den sichtbaren HDR10-Bildmodus
+aber noch nicht geloest. Der naechste Schritt ist das Rekonstruieren der echten
+Runtime-Werte fuer `DisplayModeSettingData`.
 
 MEMC:
 

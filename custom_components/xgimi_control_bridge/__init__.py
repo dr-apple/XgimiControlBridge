@@ -20,9 +20,16 @@ from .const import (
     ACTION_GET_STATUS,
     ACTION_SET_MEMC,
     ACTION_SET_PICTURE_MODE,
+    ADB_COMMAND_AUTOFOCUS,
+    ADB_COMMAND_OSD_BACK,
+    ADB_COMMAND_OSD_CONFIRM,
+    ADB_COMMAND_OSD_PICTURE_MODE_NEXT,
+    ADB_COMMAND_OSD_PICTURE_MODE_OPEN,
+    ADB_COMMAND_OSD_PICTURE_MODE_PREVIOUS,
     ADB_COMMAND_SERVICE,
     ANDROIDTV_DOMAIN,
     ATTR_ADB_RESPONSE,
+    ATTR_LAST_ACTION,
     ATTR_LAST_RESPONSE,
     ATTR_MEMC,
     ATTR_OK,
@@ -30,13 +37,25 @@ from .const import (
     ATTR_PQ_AI_PICTURE,
     ATTR_PQ_BACKLIGHT,
     ATTR_PQ_BRIGHTNESS,
+    ATTR_PQ_COLOR_SPACE,
     ATTR_PQ_COLOR_TEMPERATURE,
     ATTR_PQ_CONTRAST,
+    ATTR_PQ_DARK_DETAIL,
+    ATTR_PQ_DYNAMIC_COLOR_BOOSTER,
+    ATTR_PQ_FILM_MODE,
     ATTR_PQ_GAMMA,
+    ATTR_PQ_GLOBAL_DIMMING,
+    ATTR_PQ_HDR_MODE,
+    ATTR_PQ_HDR_TYPE,
+    ATTR_PQ_HUE,
     ATTR_PQ_JSON,
     ATTR_PQ_LOCAL_CONTRAST,
+    ATTR_PQ_LOW_LATENCY,
     ATTR_PQ_MEMC_EFFECT,
+    ATTR_PQ_MPEG_NR,
+    ATTR_PQ_NR,
     ATTR_PQ_PICTURE_MODE,
+    ATTR_PQ_SATURATION,
     ATTR_SOURCE,
     BRIDGE_COMPONENT,
     CONF_MEDIA_PLAYER_ENTITY_ID,
@@ -46,6 +65,7 @@ from .const import (
     PICTURE_MODE_BY_VALUE,
     PICTURE_MODES,
     PQ_SERVICE_CALL_GET_GLOBAL_NON_AWARE,
+    PQ_SERVICE_CALL_GET_HDR_TYPE,
     PQ_SERVICE_CALL_SET_GLOBAL_TRANSACTION,
     PQ_SERVICE_CALL_SET_PERSTREAM_TRANSACTION,
     PQ_SERVICE_NAME,
@@ -187,6 +207,10 @@ def _async_register_services(hass: HomeAssistant) -> None:
         for entity_id in _entity_ids_from_call(call):
             await async_get_native_pq_status(hass, entity_id)
 
+    async def get_native_hdr_type(call: ServiceCall) -> None:
+        for entity_id in _entity_ids_from_call(call):
+            await async_get_native_hdr_type(hass, entity_id)
+
     async def set_native_pq_value(call: ServiceCall) -> None:
         for entity_id in _entity_ids_from_call(call):
             await async_set_native_pq_value(
@@ -199,6 +223,15 @@ def _async_register_services(hass: HomeAssistant) -> None:
     async def get_ext_pq_status(call: ServiceCall) -> None:
         for entity_id in _entity_ids_from_call(call):
             await async_get_ext_pq_status(hass, entity_id)
+
+    async def run_adb_action(call: ServiceCall, command: str, label: str) -> None:
+        for entity_id in _entity_ids_from_call(call):
+            await async_send_adb_command(
+                hass,
+                entity_id,
+                command,
+                status_label=label,
+            )
 
     if not hass.services.has_service(DOMAIN, "set_picture_mode"):
         hass.services.async_register(
@@ -228,6 +261,13 @@ def _async_register_services(hass: HomeAssistant) -> None:
             get_native_pq_status,
             schema=GET_STATUS_SCHEMA,
         )
+    if not hass.services.has_service(DOMAIN, "get_native_hdr_type"):
+        hass.services.async_register(
+            DOMAIN,
+            "get_native_hdr_type",
+            get_native_hdr_type,
+            schema=GET_STATUS_SCHEMA,
+        )
     if not hass.services.has_service(DOMAIN, "set_native_pq_value"):
         hass.services.async_register(
             DOMAIN,
@@ -240,6 +280,40 @@ def _async_register_services(hass: HomeAssistant) -> None:
             DOMAIN,
             "get_ext_pq_status",
             get_ext_pq_status,
+            schema=GET_STATUS_SCHEMA,
+        )
+    adb_actions = {
+        "autofocus": (ADB_COMMAND_AUTOFOCUS, "autofocus"),
+        "open_picture_mode_osd": (
+            ADB_COMMAND_OSD_PICTURE_MODE_OPEN,
+            "open_picture_mode_osd",
+        ),
+        "osd_picture_mode_previous": (
+            ADB_COMMAND_OSD_PICTURE_MODE_PREVIOUS,
+            "picture_mode_previous",
+        ),
+        "osd_picture_mode_next": (
+            ADB_COMMAND_OSD_PICTURE_MODE_NEXT,
+            "picture_mode_next",
+        ),
+        "osd_confirm": (ADB_COMMAND_OSD_CONFIRM, "osd_confirm"),
+        "osd_back": (ADB_COMMAND_OSD_BACK, "osd_back"),
+    }
+    for service_name, (command, label) in adb_actions.items():
+        if hass.services.has_service(DOMAIN, service_name):
+            continue
+
+        async def adb_action(
+            call: ServiceCall,
+            adb_command: str = command,
+            status_label: str = label,
+        ) -> None:
+            await run_adb_action(call, adb_command, status_label)
+
+        hass.services.async_register(
+            DOMAIN,
+            service_name,
+            adb_action,
             schema=GET_STATUS_SCHEMA,
         )
 
@@ -317,6 +391,35 @@ async def async_get_native_pq_status(hass: HomeAssistant, entity_id: str) -> Non
     )
 
 
+async def async_get_native_hdr_type(hass: HomeAssistant, entity_id: str) -> None:
+    """Read native MediaTek HDR type status."""
+    await hass.services.async_call(
+        ANDROIDTV_DOMAIN,
+        ADB_COMMAND_SERVICE,
+        {"command": PQ_SERVICE_CALL_GET_HDR_TYPE},
+        blocking=True,
+        target={ATTR_ENTITY_ID: entity_id},
+    )
+
+    raw_response = _adb_response_from_entity(hass, entity_id)
+    words = _parse_service_call_words(raw_response)
+    decoded = _decode_two_single_value_arrays(words)
+    for entry_id, runtime_data in hass.data.get(DOMAIN, {}).items():
+        config_data = runtime_data["data"]
+        if config_data[CONF_MEDIA_PLAYER_ENTITY_ID] != entity_id:
+            continue
+
+        runtime_data[ATTR_LAST_RESPONSE] = raw_response
+        status = dict(runtime_data.get("status", {}))
+        status[ATTR_OK] = decoded is not None
+        if decoded is not None:
+            _status_code, return_code, hdr_type = decoded
+            status[ATTR_PQ_HDR_TYPE] = hdr_type
+            status["pq_hdr_type_return_code"] = return_code
+        runtime_data["status"] = status
+        async_dispatcher_send(hass, f"{SIGNAL_STATUS_UPDATED}_{entry_id}")
+
+
 async def async_read_native_pq_settings(
     hass: HomeAssistant,
     entity_id: str,
@@ -369,6 +472,37 @@ async def async_set_native_pq_value(
 async def async_get_ext_pq_status(hass: HomeAssistant, entity_id: str) -> None:
     """Read MediaTek ExtService PQ status through the bridge APK."""
     await async_send_bridge_command(hass, entity_id, ACTION_GET_EXT_PQ_SETTINGS)
+
+
+async def async_send_adb_command(
+    hass: HomeAssistant,
+    entity_id: str,
+    command: str,
+    *,
+    status_label: str | None = None,
+) -> None:
+    """Send a plain Android TV ADB command and store its response."""
+    await hass.services.async_call(
+        ANDROIDTV_DOMAIN,
+        ADB_COMMAND_SERVICE,
+        {"command": command},
+        blocking=True,
+        target={ATTR_ENTITY_ID: entity_id},
+    )
+
+    raw_response = _adb_response_from_entity(hass, entity_id)
+    for entry_id, runtime_data in hass.data.get(DOMAIN, {}).items():
+        config_data = runtime_data["data"]
+        if config_data[CONF_MEDIA_PLAYER_ENTITY_ID] != entity_id:
+            continue
+
+        runtime_data[ATTR_LAST_RESPONSE] = raw_response
+        status = dict(runtime_data.get("status", {}))
+        status[ATTR_OK] = _adb_command_response_looks_ok(raw_response)
+        if status_label is not None:
+            status[ATTR_LAST_ACTION] = status_label
+        runtime_data["status"] = status
+        async_dispatcher_send(hass, f"{SIGNAL_STATUS_UPDATED}_{entry_id}")
 
 
 def _build_broadcast_command(
@@ -509,6 +643,13 @@ def _parse_service_call_words(raw_response: str | None) -> list[int]:
     return words
 
 
+def _decode_two_single_value_arrays(words: list[int]) -> tuple[int, int, int] | None:
+    """Decode AIDL out arrays shaped like return-code[] and value[]."""
+    if len(words) < 5 or words[1] != 1 or words[3] != 1:
+        return None
+    return words[0], words[2], words[4]
+
+
 def _parse_json_object(raw_json: str | None) -> dict | None:
     """Return a JSON object if raw_json contains one."""
     if not raw_json:
@@ -630,12 +771,31 @@ def _apply_pq_settings_to_status(status: dict, pq_settings: dict) -> None:
     status[ATTR_PQ_BACKLIGHT] = pq_settings.get("Backlight")
     status[ATTR_PQ_BRIGHTNESS] = pq_settings.get("Brightness")
     status[ATTR_PQ_CONTRAST] = pq_settings.get("Contrast")
+    status[ATTR_PQ_COLOR_SPACE] = pq_settings.get("Color space")
+    status[ATTR_PQ_DARK_DETAIL] = pq_settings.get("Dark_Detail")
+    status[ATTR_PQ_DYNAMIC_COLOR_BOOSTER] = pq_settings.get("Dynamic_Color_Booster")
+    status[ATTR_PQ_FILM_MODE] = pq_settings.get("Film_Mode")
     status[ATTR_PQ_GAMMA] = pq_settings.get("Gamma")
+    status[ATTR_PQ_GLOBAL_DIMMING] = pq_settings.get("Global_Dimming")
+    status[ATTR_PQ_HDR_MODE] = pq_settings.get("HDR_Mode")
+    status[ATTR_PQ_HUE] = pq_settings.get("Hue")
     status[ATTR_PQ_COLOR_TEMPERATURE] = pq_settings.get("Color_Temperature")
     status[ATTR_PQ_AI_PICTURE] = pq_settings.get("AI_PQ")
     status[ATTR_PQ_MEMC_EFFECT] = pq_settings.get("MJC_Effect")
     status[ATTR_PQ_LOCAL_CONTRAST] = pq_settings.get("Local_Contrast")
+    status[ATTR_PQ_LOW_LATENCY] = pq_settings.get("Low_Latency")
+    status[ATTR_PQ_MPEG_NR] = pq_settings.get("MPEG_NR")
+    status[ATTR_PQ_NR] = pq_settings.get("NR")
     status[ATTR_PQ_PICTURE_MODE] = pq_settings.get("Picture_Mode")
+    status[ATTR_PQ_SATURATION] = pq_settings.get("Saturation")
+
+
+def _adb_command_response_looks_ok(raw_response: str | None) -> bool:
+    """Return whether a plain ADB command response looks successful."""
+    if not raw_response:
+        return True
+    lowered = raw_response.lower()
+    return "exception" not in lowered and "error" not in lowered and "failed" not in lowered
 
 
 def _name_from_value(value: int | None, names: dict[int, str]) -> str | None:
