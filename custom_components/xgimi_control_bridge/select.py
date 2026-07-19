@@ -9,6 +9,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import (
+    async_set_osd_picture_mode,
     async_set_native_pq_value,
     async_send_bridge_command,
     config_entry_media_player_entity_id,
@@ -17,6 +18,7 @@ from . import (
 from .const import (
     ACTION_SET_MEMC,
     ATTR_MEMC,
+    ATTR_OSD_PICTURE_MODE,
     ATTR_PQ_AI_PICTURE,
     ATTR_PQ_COLOR_TEMPERATURE,
     ATTR_PQ_GAMMA,
@@ -24,6 +26,7 @@ from .const import (
     ATTR_PQ_MEMC_EFFECT,
     DOMAIN,
     MEMC_LEVELS,
+    OSD_PICTURE_MODES,
     SIGNAL_STATUS_UPDATED,
 )
 
@@ -85,6 +88,7 @@ async def async_setup_entry(
                 ACTION_SET_MEMC,
                 "level",
             ),
+            XgimiOsdPictureModeSelect(entry, entity_id),
             *[
                 XgimiNativePqSelect(entry, entity_id, description)
                 for description in NATIVE_PQ_SELECTS
@@ -157,6 +161,61 @@ class XgimiBridgeSelect(SelectEntity):
         """Update the current option from stored status."""
         status = config_entry_runtime_data(self.hass, self._entry).get("status", {})
         option = status.get(ATTR_MEMC)
+        if option in self.options:
+            self._attr_current_option = option
+        self.schedule_update_ha_state()
+
+
+class XgimiOsdPictureModeSelect(SelectEntity):
+    """Optimistic select backed by visible OSD navigation."""
+
+    _attr_has_entity_name = True
+
+    def __init__(self, entry: ConfigEntry, media_player_entity_id: str) -> None:
+        """Initialize the OSD picture mode select."""
+        self._entry = entry
+        self._media_player_entity_id = media_player_entity_id
+        self._attr_unique_id = f"{entry.entry_id}_osd_picture_mode"
+        self._attr_translation_key = "osd_picture_mode"
+        self._attr_name = "OSD Picture Mode"
+        self._attr_options = OSD_PICTURE_MODES
+        self._attr_current_option = None
+
+    async def async_added_to_hass(self) -> None:
+        """Register for status updates."""
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                f"{SIGNAL_STATUS_UPDATED}_{self._entry.entry_id}",
+                self._handle_status_update,
+            )
+        )
+        self._handle_status_update()
+
+    @property
+    def device_info(self):
+        """Return device information for the bridge controls."""
+        return {
+            "identifiers": {(DOMAIN, self._entry.entry_id)},
+            "name": "XGIMI Control Bridge",
+            "manufacturer": "XGIMI",
+            "model": "Control Bridge",
+        }
+
+    async def async_select_option(self, option: str) -> None:
+        """Select a visible OSD picture mode by stepping through the OSD."""
+        await async_set_osd_picture_mode(
+            self.hass,
+            self._media_player_entity_id,
+            option,
+        )
+        self._attr_current_option = option
+        self.async_write_ha_state()
+
+    def _handle_status_update(self) -> None:
+        """Update the current option from stored OSD status."""
+        status = config_entry_runtime_data(self.hass, self._entry).get("status", {})
+        option = status.get(ATTR_OSD_PICTURE_MODE)
         if option in self.options:
             self._attr_current_option = option
         self.schedule_update_ha_state()

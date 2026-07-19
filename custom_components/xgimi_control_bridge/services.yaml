@@ -112,6 +112,42 @@ get_ext_pq_status:
     entity:
       domain: media_player
 
+set_osd_picture_mode:
+  name: Set OSD picture mode
+  description: Set the visible picture mode by opening the original OSD and stepping left or right from the synced mode.
+  target:
+    entity:
+      domain: media_player
+  fields:
+    mode:
+      required: true
+      selector:
+        select:
+          options:
+            - Lebhaft
+            - Spiel
+            - Film
+            - Standard
+            - Benutzerdefiniert
+
+sync_osd_picture_mode:
+  name: Sync OSD picture mode
+  description: Tell Home Assistant which picture mode is currently selected in the projector OSD.
+  target:
+    entity:
+      domain: media_player
+  fields:
+    mode:
+      required: true
+      selector:
+        select:
+          options:
+            - Lebhaft
+            - Spiel
+            - Film
+            - Standard
+            - Benutzerdefiniert
+
 autofocus:
   name: Autofocus
   description: Start the confirmed native XGIMI autofocus Binder call.
