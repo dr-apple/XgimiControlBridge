@@ -14,6 +14,7 @@ from .const import (
     ATTR_LAST_ACTION,
     ATTR_MEMC,
     ATTR_OK,
+    ATTR_OSD_PICTURE_MODE,
     ATTR_PICTURE_MODE,
     ATTR_PQ_AI_PICTURE,
     ATTR_PQ_BACKLIGHT,
@@ -54,6 +55,12 @@ async def async_setup_entry(
             XgimiBridgeSensor(entry, "picture_mode", "Picture Mode", ATTR_PICTURE_MODE),
             XgimiBridgeSensor(entry, "memc", "MEMC", ATTR_MEMC),
             XgimiBridgeSensor(entry, "source", "Source", ATTR_SOURCE),
+            XgimiBridgeSensor(
+                entry,
+                "osd_picture_mode",
+                "OSD Picture Mode",
+                ATTR_OSD_PICTURE_MODE,
+            ),
             XgimiBridgeSensor(entry, "last_action", "Last Action", ATTR_LAST_ACTION),
             XgimiBridgeSensor(
                 entry,

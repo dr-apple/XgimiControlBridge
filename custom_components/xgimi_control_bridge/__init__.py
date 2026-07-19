@@ -33,6 +33,7 @@ from .const import (
     ATTR_LAST_RESPONSE,
     ATTR_MEMC,
     ATTR_OK,
+    ATTR_OSD_PICTURE_MODE,
     ATTR_PICTURE_MODE,
     ATTR_PQ_AI_PICTURE,
     ATTR_PQ_BACKLIGHT,
@@ -62,6 +63,7 @@ from .const import (
     DOMAIN,
     MEMC_LEVEL_BY_VALUE,
     MEMC_LEVELS,
+    OSD_PICTURE_MODES,
     PICTURE_MODE_BY_VALUE,
     PICTURE_MODES,
     PQ_SERVICE_CALL_GET_GLOBAL_NON_AWARE,
@@ -137,6 +139,14 @@ SET_NATIVE_PQ_VALUE_SCHEMA = vol.Schema(
         vol.Optional(ATTR_ENTITY_ID): cv.entity_ids,
         vol.Required(ATTR_KEY): cv.string,
         vol.Required(ATTR_VALUE): vol.Any(str, int, float, bool),
+    },
+    extra=vol.PREVENT_EXTRA,
+)
+
+SET_OSD_PICTURE_MODE_SCHEMA = vol.Schema(
+    {
+        vol.Optional(ATTR_ENTITY_ID): cv.entity_ids,
+        vol.Required(ATTR_MODE): vol.In(OSD_PICTURE_MODES),
     },
     extra=vol.PREVENT_EXTRA,
 )
@@ -224,6 +234,14 @@ def _async_register_services(hass: HomeAssistant) -> None:
         for entity_id in _entity_ids_from_call(call):
             await async_get_ext_pq_status(hass, entity_id)
 
+    async def set_osd_picture_mode(call: ServiceCall) -> None:
+        for entity_id in _entity_ids_from_call(call):
+            await async_set_osd_picture_mode(hass, entity_id, call.data[ATTR_MODE])
+
+    async def sync_osd_picture_mode(call: ServiceCall) -> None:
+        for entity_id in _entity_ids_from_call(call):
+            await async_sync_osd_picture_mode(hass, entity_id, call.data[ATTR_MODE])
+
     async def run_adb_action(call: ServiceCall, command: str, label: str) -> None:
         for entity_id in _entity_ids_from_call(call):
             await async_send_adb_command(
@@ -281,6 +299,20 @@ def _async_register_services(hass: HomeAssistant) -> None:
             "get_ext_pq_status",
             get_ext_pq_status,
             schema=GET_STATUS_SCHEMA,
+        )
+    if not hass.services.has_service(DOMAIN, "set_osd_picture_mode"):
+        hass.services.async_register(
+            DOMAIN,
+            "set_osd_picture_mode",
+            set_osd_picture_mode,
+            schema=SET_OSD_PICTURE_MODE_SCHEMA,
+        )
+    if not hass.services.has_service(DOMAIN, "sync_osd_picture_mode"):
+        hass.services.async_register(
+            DOMAIN,
+            "sync_osd_picture_mode",
+            sync_osd_picture_mode,
+            schema=SET_OSD_PICTURE_MODE_SCHEMA,
         )
     adb_actions = {
         "autofocus": (ADB_COMMAND_AUTOFOCUS, "autofocus"),
@@ -474,6 +506,48 @@ async def async_get_ext_pq_status(hass: HomeAssistant, entity_id: str) -> None:
     await async_send_bridge_command(hass, entity_id, ACTION_GET_EXT_PQ_SETTINGS)
 
 
+async def async_set_osd_picture_mode(
+    hass: HomeAssistant,
+    entity_id: str,
+    mode: str,
+) -> None:
+    """Set the visible picture mode through OSD navigation."""
+    current_mode = _osd_picture_mode_from_runtime(hass, entity_id)
+    if current_mode is None:
+        raise HomeAssistantError(
+            "Sync the current OSD picture mode before using OSD Picture Mode"
+        )
+
+    steps, step_command = _osd_picture_mode_steps(current_mode, mode)
+    if steps:
+        await async_send_adb_command(
+            hass,
+            entity_id,
+            _build_osd_picture_mode_command(step_command, steps),
+            status_label="set_osd_picture_mode",
+        )
+    await async_sync_osd_picture_mode(hass, entity_id, mode)
+
+
+async def async_sync_osd_picture_mode(
+    hass: HomeAssistant,
+    entity_id: str,
+    mode: str,
+) -> None:
+    """Store the currently visible OSD picture mode without sending commands."""
+    for entry_id, runtime_data in hass.data.get(DOMAIN, {}).items():
+        config_data = runtime_data["data"]
+        if config_data[CONF_MEDIA_PLAYER_ENTITY_ID] != entity_id:
+            continue
+
+        status = dict(runtime_data.get("status", {}))
+        status[ATTR_OK] = True
+        status[ATTR_OSD_PICTURE_MODE] = mode
+        status[ATTR_LAST_ACTION] = "sync_osd_picture_mode"
+        runtime_data["status"] = status
+        async_dispatcher_send(hass, f"{SIGNAL_STATUS_UPDATED}_{entry_id}")
+
+
 async def async_send_adb_command(
     hass: HomeAssistant,
     entity_id: str,
@@ -501,8 +575,59 @@ async def async_send_adb_command(
         status[ATTR_OK] = _adb_command_response_looks_ok(raw_response)
         if status_label is not None:
             status[ATTR_LAST_ACTION] = status_label
+            _apply_osd_step_to_status(status, status_label)
         runtime_data["status"] = status
         async_dispatcher_send(hass, f"{SIGNAL_STATUS_UPDATED}_{entry_id}")
+
+
+def _build_osd_picture_mode_command(step_command: str, steps: int) -> str:
+    """Build a shell command that opens picture mode OSD, steps, and closes it."""
+    commands = [ADB_COMMAND_OSD_PICTURE_MODE_OPEN, "sleep 0.8"]
+    for _ in range(steps):
+        commands.extend([step_command, "sleep 0.25"])
+    commands.append(ADB_COMMAND_OSD_BACK)
+    return "; ".join(commands)
+
+
+def _osd_picture_mode_steps(current_mode: str, target_mode: str) -> tuple[int, str]:
+    """Return the shortest step count and command from current to target mode."""
+    current_index = OSD_PICTURE_MODES.index(current_mode)
+    target_index = OSD_PICTURE_MODES.index(target_mode)
+    forward = (target_index - current_index) % len(OSD_PICTURE_MODES)
+    backward = (current_index - target_index) % len(OSD_PICTURE_MODES)
+    if forward <= backward:
+        return forward, ADB_COMMAND_OSD_PICTURE_MODE_NEXT
+    return backward, ADB_COMMAND_OSD_PICTURE_MODE_PREVIOUS
+
+
+def _osd_picture_mode_from_runtime(
+    hass: HomeAssistant,
+    entity_id: str,
+) -> str | None:
+    """Return stored OSD picture mode for the matching config entry."""
+    for runtime_data in hass.data.get(DOMAIN, {}).values():
+        config_data = runtime_data["data"]
+        if config_data[CONF_MEDIA_PLAYER_ENTITY_ID] != entity_id:
+            continue
+        mode = runtime_data.get("status", {}).get(ATTR_OSD_PICTURE_MODE)
+        return mode if mode in OSD_PICTURE_MODES else None
+    return None
+
+
+def _apply_osd_step_to_status(status: dict, status_label: str) -> None:
+    """Update optimistic OSD picture mode for manual next/previous buttons."""
+    current_mode = status.get(ATTR_OSD_PICTURE_MODE)
+    if current_mode not in OSD_PICTURE_MODES:
+        return
+    current_index = OSD_PICTURE_MODES.index(current_mode)
+    if status_label == "picture_mode_next":
+        status[ATTR_OSD_PICTURE_MODE] = OSD_PICTURE_MODES[
+            (current_index + 1) % len(OSD_PICTURE_MODES)
+        ]
+    if status_label == "picture_mode_previous":
+        status[ATTR_OSD_PICTURE_MODE] = OSD_PICTURE_MODES[
+            (current_index - 1) % len(OSD_PICTURE_MODES)
+        ]
 
 
 def _build_broadcast_command(

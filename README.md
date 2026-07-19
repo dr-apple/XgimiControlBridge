@@ -235,6 +235,7 @@ select.wohnzimmer_xgimi_control_bridge_native_pq_color_temperature
 select.wohnzimmer_xgimi_control_bridge_native_pq_ai_picture
 select.wohnzimmer_xgimi_control_bridge_native_pq_memc
 select.wohnzimmer_xgimi_control_bridge_native_pq_local_contrast
+select.wohnzimmer_xgimi_control_bridge_osd_picture_mode
 ```
 
 Wichtig: Der alte direkte `select.xgimi_control_bridge_picture_mode` wird nicht
@@ -261,7 +262,9 @@ button.xgimi_control_bridge_picture_mode_previous
 button.xgimi_control_bridge_picture_mode_next
 button.xgimi_control_bridge_osd_confirm
 button.xgimi_control_bridge_osd_back
+select.xgimi_control_bridge_osd_picture_mode
 sensor.xgimi_control_bridge_picture_mode
+sensor.xgimi_control_bridge_osd_picture_mode
 sensor.xgimi_control_bridge_memc
 sensor.xgimi_control_bridge_source
 sensor.xgimi_control_bridge_native_pq_hdr_type
@@ -306,6 +309,8 @@ xgimi_control_bridge.get_native_pq_status
 xgimi_control_bridge.get_native_hdr_type
 xgimi_control_bridge.set_native_pq_value
 xgimi_control_bridge.get_ext_pq_status
+xgimi_control_bridge.set_osd_picture_mode
+xgimi_control_bridge.sync_osd_picture_mode
 xgimi_control_bridge.autofocus
 xgimi_control_bridge.open_picture_mode_osd
 xgimi_control_bridge.osd_picture_mode_previous
@@ -316,15 +321,31 @@ xgimi_control_bridge.osd_back
 
 Empfohlener OSD-Ablauf fuer den sichtbaren Bildmodus:
 
+1. Einmal den aktuellen Modus synchronisieren:
+
 ```yaml
-action: xgimi_control_bridge.open_picture_mode_osd
+action: xgimi_control_bridge.sync_osd_picture_mode
 target:
   entity_id: media_player.xgimi_h20
+data:
+  mode: Lebhaft
 ```
 
-Danach mit `xgimi_control_bridge.osd_picture_mode_next` oder
-`xgimi_control_bridge.osd_picture_mode_previous` umschalten und mit
-`xgimi_control_bridge.osd_back` wieder schliessen.
+2. Danach den Select `select.xgimi_control_bridge_osd_picture_mode` benutzen
+oder den Service direkt aufrufen:
+
+```yaml
+action: xgimi_control_bridge.set_osd_picture_mode
+target:
+  entity_id: media_player.xgimi_h20
+data:
+  mode: Film
+```
+
+Die Integration oeffnet dabei das originale Picture-Mode-OSD, drueckt die
+kuerzeste Links-/Rechts-Sequenz und schliesst das OSD wieder. Wenn du mit der
+Fernbedienung manuell umstellst, danach wieder `sync_osd_picture_mode`
+aufrufen, damit HA und Beamer dieselbe Ausgangsposition kennen.
 
 Autofokus:
 

@@ -11,6 +11,7 @@ ATTR_LAST_ACTION = "last_action"
 ATTR_LAST_RESPONSE = "last_response"
 ATTR_MEMC = "memc"
 ATTR_OK = "ok"
+ATTR_OSD_PICTURE_MODE = "osd_picture_mode"
 ATTR_PICTURE_MODE = "picture_mode"
 ATTR_PQ_AI_PICTURE = "pq_ai_picture"
 ATTR_PQ_BACKLIGHT = "pq_backlight"
@@ -84,6 +85,14 @@ MEMC_LEVELS = [
     "middle",
     "high",
     "bypass",
+]
+
+OSD_PICTURE_MODES = [
+    "Lebhaft",
+    "Spiel",
+    "Film",
+    "Standard",
+    "Benutzerdefiniert",
 ]
 
 PICTURE_MODE_BY_VALUE = dict(enumerate(PICTURE_MODES))

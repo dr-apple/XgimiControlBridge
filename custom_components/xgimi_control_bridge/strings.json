@@ -61,6 +61,9 @@
       "memc": {
         "name": "MEMC"
       },
+      "osd_picture_mode": {
+        "name": "OSD picture mode"
+      },
       "native_pq_ai_picture": {
         "name": "Native PQ AI picture"
       },
@@ -92,6 +95,9 @@
       },
       "picture_mode": {
         "name": "Picture mode status"
+      },
+      "osd_picture_mode": {
+        "name": "OSD picture mode status"
       },
       "pq_ai_picture": {
         "name": "Native PQ AI picture"
