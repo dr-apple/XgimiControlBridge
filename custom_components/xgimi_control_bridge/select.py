@@ -16,9 +16,7 @@ from . import (
 )
 from .const import (
     ACTION_SET_MEMC,
-    ACTION_SET_PICTURE_MODE,
     ATTR_MEMC,
-    ATTR_PICTURE_MODE,
     ATTR_PQ_AI_PICTURE,
     ATTR_PQ_COLOR_TEMPERATURE,
     ATTR_PQ_GAMMA,
@@ -26,7 +24,6 @@ from .const import (
     ATTR_PQ_MEMC_EFFECT,
     DOMAIN,
     MEMC_LEVELS,
-    PICTURE_MODES,
     SIGNAL_STATUS_UPDATED,
 )
 
@@ -79,15 +76,6 @@ async def async_setup_entry(
     entity_id = config_entry_media_player_entity_id(entry)
     async_add_entities(
         [
-            XgimiBridgeSelect(
-                entry,
-                entity_id,
-                "picture_mode",
-                "Picture Mode",
-                PICTURE_MODES,
-                ACTION_SET_PICTURE_MODE,
-                "mode",
-            ),
             XgimiBridgeSelect(
                 entry,
                 entity_id,
@@ -168,10 +156,7 @@ class XgimiBridgeSelect(SelectEntity):
     def _handle_status_update(self) -> None:
         """Update the current option from stored status."""
         status = config_entry_runtime_data(self.hass, self._entry).get("status", {})
-        status_key = (
-            ATTR_PICTURE_MODE if self._status_key == "picture_mode" else ATTR_MEMC
-        )
-        option = status.get(status_key)
+        option = status.get(ATTR_MEMC)
         if option in self.options:
             self._attr_current_option = option
         self.schedule_update_ha_state()

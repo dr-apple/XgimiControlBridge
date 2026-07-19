@@ -165,6 +165,49 @@ app_process ... -> Error changing dalvik-cache ownership / Killed
 dalvikvm32 ...  -> ServiceManager native_get_int UnsatisfiedLinkError
 ```
 
-So the next viable direct `setMode` path is a small native Android executable
-built with the NDK and run from ADB shell, or a privileged/system-signed bridge
-running in the same trust domain as MediaTek/XGIMI settings.
+## Native Shell Helper
+
+`v0.1.15` adds a native `armeabi-v7a` shell helper:
+
+```bash
+native/build_xgimi_pq_tool.sh
+scripts/xgimi_h20_adb.py -s 192.168.0.223:5555 native-pq-tool-push
+scripts/xgimi_h20_adb.py -s 192.168.0.223:5555 native-pq-get-hdr-type --pq-id 0
+```
+
+Live result:
+
+```text
+return_code=0 hdr_type=1
+```
+
+The important implementation detail is that MediaTek's NDK-AIDL stubs expect
+placeholder values for `out` parameters in the input parcel. For example,
+`getHdrType(int, out EN_RETURN_VALUE[], out EN_PQ_HDR_TYPE[])` needs two
+`int32 0` placeholders after `pqId`; without them the native transaction fails
+with `STATUS_NOT_ENOUGH_DATA`.
+
+`setMode` is now callable through the native helper:
+
+```bash
+scripts/xgimi_h20_adb.py -s 192.168.0.223:5555 \
+  native-pq-set-mode --display-mode-type 30
+```
+
+Live findings:
+
+```text
+displayModeType 0..3 -> binder STATUS_BAD_VALUE
+displayModeType 4..29,31..40 -> return_code=3
+displayModeType 30 -> return_code=0 once during scan, return_code=3 on repeat
+```
+
+The successful/native `setMode` attempts did not yet change the visible OSD
+Picture Mode. One run around `displayModeType=30` did trigger
+`GM_DISP_SCENE_V3` luminance/temp-color logs and reset `Backlight` from `40` to
+`50`, which suggests this transaction reaches a display-scene path but is not
+the final HDR10 picture profile selector by itself.
+
+The next step is to recover valid `inputSourceType`, `outputVideoFormat`, and
+scene values from MediaTek/XGIMI settings logs or generated enum tables, then
+repeat `native-pq-set-mode` with those real runtime values.

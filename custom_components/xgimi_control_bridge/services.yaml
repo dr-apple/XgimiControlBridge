@@ -82,6 +82,13 @@ get_native_pq_status:
     entity:
       domain: media_player
 
+get_native_hdr_type:
+  name: Get native HDR type
+  description: Read the native MediaTek PQ HDR type through Android service call.
+  target:
+    entity:
+      domain: media_player
+
 set_native_pq_value:
   name: Set native PQ value
   description: Read the current native MediaTek PQ JSON, change one key, and write the full JSON back.
@@ -101,6 +108,48 @@ set_native_pq_value:
 get_ext_pq_status:
   name: Get ExtService PQ status
   description: Read MediaTek PQ status through the bridge APK and the OSD-adjacent ExtService path.
+  target:
+    entity:
+      domain: media_player
+
+autofocus:
+  name: Autofocus
+  description: Start the confirmed native XGIMI autofocus Binder call.
+  target:
+    entity:
+      domain: media_player
+
+open_picture_mode_osd:
+  name: Open Picture Mode OSD
+  description: Open the projector's original Google TV / MediaTek Picture Mode screen.
+  target:
+    entity:
+      domain: media_player
+
+osd_picture_mode_previous:
+  name: OSD Picture Mode Previous
+  description: Move one step left in the open Picture Mode OSD.
+  target:
+    entity:
+      domain: media_player
+
+osd_picture_mode_next:
+  name: OSD Picture Mode Next
+  description: Move one step right in the open Picture Mode OSD.
+  target:
+    entity:
+      domain: media_player
+
+osd_confirm:
+  name: OSD Confirm
+  description: Send DPAD center / OK to the projector OSD.
+  target:
+    entity:
+      domain: media_player
+
+osd_back:
+  name: OSD Back
+  description: Send Back to close or step out of the projector OSD.
   target:
     entity:
       domain: media_player

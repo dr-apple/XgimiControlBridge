@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from pathlib import Path
 import shlex
 import subprocess
 import sys
@@ -21,6 +22,9 @@ BRIDGE_COMPONENT = "de.drapple.xgimi/.XgimiCommandReceiver"
 ACTION_GET_EXT_PQ_SETTINGS = "de.drapple.xgimi.GET_EXT_PQ_SETTINGS"
 ACTION_MIDDLEWARE_EXEC_SYNC = "de.drapple.xgimi.MIDDLEWARE_EXEC_SYNC"
 ACTION_PQ_SET_MODE = "de.drapple.xgimi.PQ_SET_MODE"
+REPO_ROOT = Path(__file__).resolve().parents[1]
+NATIVE_PQ_TOOL_LOCAL = REPO_ROOT / "dist" / "native" / "xgimi-pq-tool-armeabi-v7a"
+NATIVE_PQ_TOOL_REMOTE = "/data/local/tmp/xgimi-pq-tool"
 
 
 def adb(args: list[str], *, dry_run: bool, serial: str | None = None) -> int:
@@ -371,6 +375,71 @@ def bridge_pq_set_mode_shell(args: argparse.Namespace) -> int:
     return 0
 
 
+def native_pq_tool_push(args: argparse.Namespace) -> int:
+    if not NATIVE_PQ_TOOL_LOCAL.exists():
+        print(f"Native helper is missing: {NATIVE_PQ_TOOL_LOCAL}", file=sys.stderr)
+        return 1
+    push_cmd = ["adb"]
+    if args.serial:
+        push_cmd.extend(["-s", args.serial])
+    push_cmd.extend(["push", str(NATIVE_PQ_TOOL_LOCAL), NATIVE_PQ_TOOL_REMOTE])
+    print("+", " ".join(shlex.quote(part) for part in push_cmd))
+    if args.dry_run:
+        return 0
+    subprocess.check_call(push_cmd)
+    return adb(["chmod", "755", NATIVE_PQ_TOOL_REMOTE], dry_run=False, serial=args.serial)
+
+
+def native_pq_get_hdr_type(args: argparse.Namespace) -> int:
+    params = [NATIVE_PQ_TOOL_REMOTE, "get-hdr-type", str(args.pq_id)]
+    if args.dry_run:
+        return adb(params, dry_run=True, serial=args.serial)
+    output = adb_output(params, serial=args.serial)
+    if not output:
+        return 1
+    print(output.strip())
+    return 0
+
+
+def native_pq_set_mode(args: argparse.Namespace) -> int:
+    params = [
+        NATIVE_PQ_TOOL_REMOTE,
+        "set-mode",
+        str(args.pq_id),
+        str(args.display_mode_type),
+        str(args.input_source_type),
+        str(args.output_video_format),
+        "true" if args.low_latency else "false",
+        str(args.field4),
+        str(args.field5),
+    ]
+    if args.dry_run:
+        return adb(params, dry_run=True, serial=args.serial)
+    output = adb_output(params, serial=args.serial)
+    if not output:
+        return 1
+    print(output.strip())
+    return 0
+
+
+def native_pq_scan_display_modes(args: argparse.Namespace) -> int:
+    for display_mode_type in range(args.start, args.end + 1):
+        params = [
+            NATIVE_PQ_TOOL_REMOTE,
+            "set-mode",
+            str(args.pq_id),
+            str(display_mode_type),
+            str(args.input_source_type),
+            str(args.output_video_format),
+            "true" if args.low_latency else "false",
+            str(args.field4),
+            str(args.field5),
+        ]
+        output = adb_output(params, serial=args.serial).strip()
+        print(f"display_mode_type={display_mode_type} {output}")
+    return 0
+
+
 def raw_service(args: argparse.Namespace) -> int:
     return service_call(args.service, args.transaction, args.params, dry_run=args.dry_run, serial=args.serial)
 
@@ -463,6 +532,40 @@ def main(argv: list[str]) -> int:
     )
     add_pq_set_mode_args(mode_shell)
     mode_shell.set_defaults(func=bridge_pq_set_mode_shell)
+
+    native_push = sub.add_parser(
+        "native-pq-tool-push",
+        help="Push the native armeabi-v7a MediaTek PQ helper to /data/local/tmp",
+    )
+    native_push.set_defaults(func=native_pq_tool_push)
+
+    native_hdr = sub.add_parser(
+        "native-pq-get-hdr-type",
+        help="Call getHdrType through the native shell helper",
+    )
+    native_hdr.add_argument("--pq-id", type=int, default=0)
+    native_hdr.set_defaults(func=native_pq_get_hdr_type)
+
+    native_mode = sub.add_parser(
+        "native-pq-set-mode",
+        help="Call setMode through the native shell helper",
+    )
+    add_pq_set_mode_args(native_mode)
+    native_mode.set_defaults(func=native_pq_set_mode)
+
+    native_scan = sub.add_parser(
+        "native-pq-scan-display-modes",
+        help="Scan displayModeType values through the native shell helper",
+    )
+    native_scan.add_argument("--start", type=int, default=0)
+    native_scan.add_argument("--end", type=int, default=40)
+    native_scan.add_argument("--pq-id", type=int, default=0)
+    native_scan.add_argument("--input-source-type", type=int, default=0)
+    native_scan.add_argument("--output-video-format", type=int, default=0)
+    native_scan.add_argument("--low-latency", action="store_true")
+    native_scan.add_argument("--field4", type=int, default=0)
+    native_scan.add_argument("--field5", type=int, default=0)
+    native_scan.set_defaults(func=native_pq_scan_display_modes)
 
     raw = sub.add_parser("service-call", help="Execute a raw Android service call")
     raw.add_argument("service")
