@@ -7,13 +7,13 @@ import logging
 import re
 import shlex
 
+import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
-
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_ENTITY_ID, CONF_SOURCE, Platform
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import HomeAssistantError
-import homeassistant.helpers.config_validation as cv
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from .const import (
     ACTION_GET_EXT_PQ_SETTINGS,
@@ -73,7 +73,6 @@ from .const import (
     PQ_SERVICE_NAME,
     SIGNAL_STATUS_UPDATED,
 )
-from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -89,9 +88,7 @@ ATTR_KEY = "key"
 ATTR_MODE = "mode"
 ATTR_VALUE = "value"
 
-_BROADCAST_DATA_RE = re.compile(
-    r'data=(?P<quote>["\'])(?P<data>.*)(?P=quote)', re.DOTALL
-)
+_BROADCAST_DATA_RE = re.compile(r'data=(?P<quote>["\'])(?P<data>.*)(?P=quote)', re.DOTALL)
 
 _NATIVE_PQ_PERSTREAM_KEYS = {
     "AI_PQ",
@@ -176,6 +173,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 def _async_register_services(hass: HomeAssistant) -> None:
     """Register integration services once."""
+
     async def set_picture_mode(call: ServiceCall) -> None:
         if ATTR_MODE not in call.data and ATTR_VALUE not in call.data:
             raise HomeAssistantError("Either mode or value is required")
@@ -352,7 +350,7 @@ def _async_register_services(hass: HomeAssistant) -> None:
 
 def _entity_ids_from_call(call: ServiceCall) -> list[str]:
     """Return entity ids from service data or target."""
-    entity_ids = call.data.get(ATTR_ENTITY_ID) or call.target.get(ATTR_ENTITY_ID)
+    entity_ids = call.data.get(ATTR_ENTITY_ID)
     if entity_ids is None:
         raise HomeAssistantError("A media_player target or entity_id is required")
     if isinstance(entity_ids, str):
@@ -514,9 +512,7 @@ async def async_set_osd_picture_mode(
     """Set the visible picture mode through OSD navigation."""
     current_mode = _osd_picture_mode_from_runtime(hass, entity_id)
     if current_mode is None:
-        raise HomeAssistantError(
-            "Sync the current OSD picture mode before using OSD Picture Mode"
-        )
+        raise HomeAssistantError("Sync the current OSD picture mode before using OSD Picture Mode")
 
     steps, step_command = _osd_picture_mode_steps(current_mode, mode)
     if steps:

@@ -5,7 +5,7 @@ from __future__ import annotations
 from homeassistant.components.button import ButtonEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import (
     async_get_ext_pq_status,
@@ -16,13 +16,13 @@ from . import (
     config_entry_media_player_entity_id,
 )
 from .const import (
+    ACTION_GET_STATUS,
     ADB_COMMAND_AUTOFOCUS,
     ADB_COMMAND_OSD_BACK,
     ADB_COMMAND_OSD_CONFIRM,
     ADB_COMMAND_OSD_PICTURE_MODE_NEXT,
     ADB_COMMAND_OSD_PICTURE_MODE_OPEN,
     ADB_COMMAND_OSD_PICTURE_MODE_PREVIOUS,
-    ACTION_GET_STATUS,
     DOMAIN,
 )
 
@@ -30,7 +30,7 @@ from .const import (
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up button entities."""
     async_add_entities(

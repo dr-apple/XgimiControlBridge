@@ -5,10 +5,10 @@ from __future__ import annotations
 from typing import Any
 
 import voluptuous as vol
-
-from homeassistant import config_entries
 from homeassistant.const import Platform
 from homeassistant.helpers import selector
+
+from homeassistant import config_entries
 
 from .const import CONF_MEDIA_PLAYER_ENTITY_ID, DOMAIN
 

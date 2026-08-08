@@ -9,6 +9,8 @@ app/build/
 .DS_Store
 __pycache__/
 *.py[cod]
+.pytest_cache/
+.ruff_cache/
 
 # Local reverse-engineering inputs extracted from device firmware.
 # Keep these out of the public repository unless you have explicit rights to redistribute them.
