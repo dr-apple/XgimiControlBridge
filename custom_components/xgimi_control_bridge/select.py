@@ -6,12 +6,12 @@ from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import (
-    async_set_osd_picture_mode,
-    async_set_native_pq_value,
     async_send_bridge_command,
+    async_set_native_pq_value,
+    async_set_osd_picture_mode,
     config_entry_media_player_entity_id,
     config_entry_runtime_data,
 )
@@ -29,7 +29,6 @@ from .const import (
     OSD_PICTURE_MODES,
     SIGNAL_STATUS_UPDATED,
 )
-
 
 NATIVE_PQ_SELECTS: tuple[dict[str, object], ...] = (
     {
@@ -73,7 +72,7 @@ NATIVE_PQ_SELECTS: tuple[dict[str, object], ...] = (
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up select entities."""
     entity_id = config_entry_media_player_entity_id(entry)
@@ -279,8 +278,6 @@ class XgimiNativePqSelect(SelectEntity):
         """Update the current option from stored native PQ status."""
         status = config_entry_runtime_data(self.hass, self._entry).get("status", {})
         option = status.get(self._status_key)
-        if option in self.options:
-            self._attr_current_option = option
-        elif isinstance(option, str):
+        if option in self.options or isinstance(option, str):
             self._attr_current_option = option
         self.schedule_update_ha_state()

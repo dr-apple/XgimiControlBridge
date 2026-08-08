@@ -1,5 +1,8 @@
 # XGIMI Control Bridge
 
+Die Home-Assistant-Integration in Version `0.1.18` ist mit Home Assistant
+`2026.8` kompatibel und gegen `2026.8.1` getestet.
+
 Kleine Android-App für XGIMI H20 / Android 14. Sie nimmt ADB-Broadcasts entgegen
 und ruft über Reflection die private XGIMI-API `GmTvManager` auf.
 

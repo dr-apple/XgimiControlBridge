@@ -6,12 +6,12 @@ from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import config_entry_runtime_data
 from .const import (
-    ATTR_LAST_RESPONSE,
     ATTR_LAST_ACTION,
+    ATTR_LAST_RESPONSE,
     ATTR_MEMC,
     ATTR_OK,
     ATTR_OSD_PICTURE_MODE,
@@ -47,7 +47,7 @@ from .const import (
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up sensor entities."""
     async_add_entities(
