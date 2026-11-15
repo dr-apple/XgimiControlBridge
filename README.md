@@ -1,101 +1,87 @@
 # XGIMI Control Bridge
 
-Die Home-Assistant-Integration in Version `0.1.18` ist mit Home Assistant
-`2026.8` kompatibel und gegen `2026.8.1` getestet.
+**English** · [Deutsch](README.de.md)
 
-Kleine Android-App für XGIMI H20 / Android 14. Sie nimmt ADB-Broadcasts entgegen
-und ruft über Reflection die private XGIMI-API `GmTvManager` auf.
+[![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz)
 
-## Reverse Engineering Status
+![XGIMI Control Bridge](docs/images/banner.svg)
 
-Dieses Projekt wird jetzt zusätzlich als Reverse-Engineering-Repo für native
-XGIMI-H20-Steuerung geführt. Ziel ist eine Home-Assistant-Integration ohne
-DPAD-/Menü-Automatisierung.
+> **Tip:** for everyday use there is now the full integration **[ha-xgimi-h20](https://github.com/dr-apple/ha-xgimi-h20)** – local via ADB, no extra app, every picture setting. This repo is the experimental predecessor and its reverse-engineering collection.
 
-Neue Struktur:
+The Home Assistant integration version `0.1.18` is compatible with Home Assistant `2026.8` and tested against `2026.8.1`.
+
+A small Android app for the XGIMI H20 / Android 14. It receives ADB broadcasts and calls the private XGIMI API `GmTvManager` via reflection. It comes with a Home Assistant integration that drives the app and native MediaTek PQ tools through the Android TV integration.
+
+![How it works: Home Assistant → Android TV ADB → bridge APK / native tool → XGIMI H20](docs/images/how-it-works.svg)
+
+## Contents
+
+- [Reverse-engineering status](#reverse-engineering-status) · [Build](#build) · [Test commands](#test-commands) · [Home Assistant integration](#home-assistant-custom-integration) · [Services & examples](#services)
+
+## Reverse-engineering status
+
+This project also serves as the reverse-engineering repo for native XGIMI H20 control. The goal is a Home Assistant integration without D-pad/menu automation.
 
 ```text
-apks/          lokale, ignorierte APK-Inputs
-framework/     lokale, ignorierte Framework-/DEX-Inputs
-libs/          lokale, ignorierte native Libraries
-binder/        Binder-Service-Notizen
-docs/          Analyseplan und Native-API-Map
-scripts/       reproduzierbare Scan- und ADB-Testwerkzeuge
-findings.md    fortlaufende Erkenntnisse
-homeassistant/ Zielbild für die native HA-Integration
+apks/          local, ignored APK inputs
+framework/     local, ignored framework/DEX inputs
+libs/          local, ignored native libraries
+binder/        binder service notes
+docs/          analysis plan and native API map
+scripts/       reproducible scan and ADB test tools
+findings.md    running findings
+homeassistant/ target design for the native HA integration
 ```
 
-Wichtig: Firmware-APKs, Framework-JARs und `.so`-Dateien werden absichtlich nicht
-ins öffentliche Git-Repo aufgenommen. Sie bleiben lokal und werden von den Skripten
-analysiert.
+Important: firmware APKs, framework JARs and `.so` files are intentionally not committed to the public repo. They stay local and are analysed by the scripts.
 
-Bestätigt ist bisher der native Autofokus-Aufruf:
+Confirmed so far is the native autofocus call:
 
 ```bash
 adb shell service call xgimi.hardware.gmpf.IProjectorFocusManager/default 3 i32 2
 ```
 
-Die bisherigen Picture-/MEMC-Aufrufe über `GmTvManager` erreichen zwar die App,
-ändern aber den sichtbaren HDR10-Bildmodus nicht zuverlässig. Der aktuell stärkste
-Lead für HDR Picture Mode, MEMC, Color Temperature, Gamma, Brightness und AI Picture
-ist daher die MediaTek-PQ-Pipeline:
+The earlier picture/MEMC calls via `GmTvManager` reach the app but do not reliably change the visible HDR10 picture mode. The strongest lead for HDR picture mode, MEMC, colour temperature, gamma, brightness and AI picture is therefore the MediaTek PQ pipeline:
 
 ```text
 Settings -> PqModeManager -> JNI -> vendor.mediatek.hardware.pq-impl.so -> GM_DISP_SCENE_V3
 ```
 
-Bestätigt ist inzwischen ein nativer MediaTek-PQ-Statusleser:
+A native MediaTek PQ status reader is confirmed:
 
 ```bash
-scripts/xgimi_h20_adb.py -s 192.168.0.223:5555 pq-get-global-settings
+scripts/xgimi_h20_adb.py -s <BEAMER-IP>:5555 pq-get-global-settings
 ```
 
-Dieser liest direkt Werte wie `Picture_Mode`, `Backlight`, `Brightness`,
-`Gamma`, `Color_Temperature`, `AI_PQ`, `MJC_Effect` und `Local_Contrast`.
-Wichtig: Der dort gelesene `Picture_Mode` ist nicht der sichtbare OSD-Bildmodus.
-Beim manuellen Wechsel von `Lebhaft` auf `Spiel` blieb der rohe native Wert auf
-`ImaxEnhanced`; der echte Bildmodus liegt in der geschuetzten MediaTek
-Settings-PQ-Datenbank beziehungsweise in der `PqModeManager`-Schicht.
+It reads values such as `Picture_Mode`, `Backlight`, `Brightness`, `Gamma`, `Color_Temperature`, `AI_PQ`, `MJC_Effect` and `Local_Contrast` directly. Important: the `Picture_Mode` read there is not the visible OSD picture mode. When switching from *Vivid* to *Game* by hand, the raw native value stayed at `ImaxEnhanced`; the real picture mode lives in the protected MediaTek settings PQ database or the `PqModeManager` layer.
 
-Zusätzlich ist jetzt die OSD-nahe Java-Schicht gefunden: Google TV bindet
-`com.mediatek.extservice` mit der Action `PqService.remote` und ruft
-`com.mediatek.extservice.IPqService` auf. Besonders relevant ist
-`setPqRepositoryByPkg(packageName, enable, json)`, weil dieser Pfad full-profile
-JSON mit Source-/Paket-Ziel nutzt. Details stehen in `docs/extservice_ipq.md`.
-Die Bridge `0.1.7` enthält dafür den ersten vorsichtigen Lesetest:
-`de.drapple.xgimi.GET_EXT_PQ_SETTINGS`. Live getestet: der Dienst ist durch
-`com.mediatek.tv.extservice.permission.USE_PQSERVICE` geschützt
-(`signature|privileged`). Eine normal sideloaded APK kann ihn daher nicht direkt
-binden; der Pfad bleibt als Diagnose und für mögliche privilegierte Installationen
-dokumentiert.
+The OSD-level Java layer has also been found: Google TV binds `com.mediatek.extservice` with the action `PqService.remote` and calls `com.mediatek.extservice.IPqService`. Especially relevant is `setPqRepositoryByPkg(packageName, enable, json)`, because this path uses full-profile JSON with a source/package target. Details in `docs/extservice_ipq.md`. Bridge `0.1.7` contains a first careful read test: `de.drapple.xgimi.GET_EXT_PQ_SETTINGS`. Tested live: the service is protected by `com.mediatek.tv.extservice.permission.USE_PQSERVICE` (`signature|privileged`). A normal sideloaded APK therefore cannot bind it directly; the path stays documented for diagnostics and possible privileged installs.
 
-## Bauen
+## Build
 
-Projekt in Android Studio öffnen und **Build > Build APK(s)** wählen.
-
-Die APK liegt anschließend typischerweise hier:
+Open the project in Android Studio and choose **Build > Build APK(s)**. The APK is then typically at:
 
 ```text
 app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Installation:
+Install:
 
 ```bash
 adb install -r app-debug.apk
 ```
 
-Die App hat absichtlich kein Launcher-Icon. Sie arbeitet nur als Broadcast-Receiver.
+The app intentionally has no launcher icon. It only works as a broadcast receiver.
 
-## Testbefehle
+## Test commands
 
-Bildprofil Film:
+Picture profile *movie*:
 
 ```bash
 adb shell am broadcast -n de.drapple.xgimi/.XgimiCommandReceiver   -a de.drapple.xgimi.SET_PICTURE_MODE --es mode movie
 ```
 
-Weitere Profile:
+Other profiles:
 
 ```text
 bright, standard, soft, user, game, auto, pc, movie, natural, sports
@@ -107,43 +93,43 @@ MEMC:
 adb shell am broadcast -n de.drapple.xgimi/.XgimiCommandReceiver   -a de.drapple.xgimi.SET_MEMC --es level high
 ```
 
-MEMC-Werte:
+MEMC values:
 
 ```text
 off, low, middle, high, bypass
 ```
 
-Status abfragen:
+Query status:
 
 ```bash
 adb shell am broadcast -n de.drapple.xgimi/.XgimiCommandReceiver   -a de.drapple.xgimi.GET_STATUS
 ```
 
-Bestimmte Quelle erzwingen:
+Force a specific source:
 
 ```bash
 --ei source 0
 ```
 
-Quellen laut XGIMI-API:
+Sources according to the XGIMI API:
 
 ```text
-0 = internes Google TV / MM
+0 = internal Google TV / MM
 1 = HDMI 1
 2 = HDMI 2
 3 = HDMI 3
 4 = HDMI 4
 ```
 
-Direkte numerische Werte sind ebenfalls möglich:
+Numeric values work as well:
 
 ```bash
 adb shell am broadcast -n de.drapple.xgimi/.XgimiCommandReceiver   -a de.drapple.xgimi.SET_PICTURE_MODE --ei value 7
 ```
 
-## Bekannte XGIMI-Werte
+## Known XGIMI values
 
-Bildprofile:
+Picture profiles:
 
 ```text
 0 bright
@@ -168,51 +154,31 @@ MEMC:
 4 bypass
 ```
 
-## Home Assistant Custom Integration
+## Home Assistant custom integration
 
-### Installation mit HACS
+### Installation with HACS
 
-1. HACS öffnen.
-2. **Custom repositories** öffnen.
-3. Repository hinzufügen:
+1. Open HACS → **Custom repositories**.
+2. Add `https://github.com/dr-apple/XgimiControlBridge`, category **Integration**.
+3. Install **XGIMI Control Bridge** and restart Home Assistant.
+4. **Settings > Devices & services > Add integration** → **XGIMI Control Bridge**.
+5. Select the projector's existing Android TV / ADB `media_player` entity.
 
-   ```text
-   https://github.com/dr-apple/XgimiControlBridge
-   ```
+### Manual installation
 
-4. Kategorie **Integration** auswählen.
-5. **XGIMI Control Bridge** installieren.
-6. Home Assistant neu starten.
-7. In Home Assistant **Einstellungen > Geräte & Dienste > Integration hinzufügen**
-   öffnen und **XGIMI Control Bridge** auswählen.
-8. Die bestehende Android-TV-/ADB-`media_player`-Entity des Projektors auswählen.
+1. Copy `custom_components/xgimi_control_bridge` to `/config/custom_components/xgimi_control_bridge`.
+2. Restart Home Assistant and add **XGIMI Control Bridge** as above.
 
-### Manuelle Installation
+### Entities
 
-Dieses Repository enthält zusätzlich eine Custom Integration unter:
-
-```text
-custom_components/xgimi_control_bridge
-```
-
-Manuelle Installation:
-
-1. Den Ordner `custom_components/xgimi_control_bridge` nach Home Assistant in
-   `/config/custom_components/xgimi_control_bridge` kopieren.
-2. Home Assistant neu starten.
-3. In Home Assistant **Einstellungen > Geräte & Dienste > Integration hinzufügen**
-   öffnen und **XGIMI Control Bridge** auswählen.
-4. Die bestehende Android-TV-/ADB-`media_player`-Entity des Projektors auswählen.
-
-Die Integration legt zwei klassische Select-Entities fuer die alte XGIMI-Bridge an:
+Two classic select entities for the old XGIMI bridge:
 
 ```text
 select.xgimi_control_bridge_picture_mode
 select.xgimi_control_bridge_memc
 ```
 
-Fuer die bestaetigte native MediaTek-PQ-Steuerung gibt es zusaetzlich echte
-HA-Regler:
+For the confirmed native MediaTek PQ control there are real HA sliders:
 
 ```text
 number.xgimi_control_bridge_native_pq_backlight
@@ -220,9 +186,7 @@ number.xgimi_control_bridge_native_pq_brightness
 number.xgimi_control_bridge_native_pq_contrast
 ```
 
-Diese Regler schreiben direkt ueber `vendor.mediatek.hardware.pq.IPq/default`
-und lesen den Status danach wieder zurueck. Auf deiner Anlage heissen sie je
-nach gewaehlter Entity zum Beispiel:
+They write directly via `vendor.mediatek.hardware.pq.IPq/default` and read the status back afterwards. Depending on the selected entity they are named e.g.:
 
 ```text
 number.wohnzimmer_xgimi_control_bridge_native_pq_backlight
@@ -230,7 +194,7 @@ number.wohnzimmer_xgimi_control_bridge_native_pq_brightness
 number.wohnzimmer_xgimi_control_bridge_native_pq_contrast
 ```
 
-Die nativen Bildoptionen liegen als eigene Dropdowns daneben:
+Native picture options as dropdowns:
 
 ```text
 select.wohnzimmer_xgimi_control_bridge_native_pq_gamma
@@ -241,19 +205,11 @@ select.wohnzimmer_xgimi_control_bridge_native_pq_local_contrast
 select.wohnzimmer_xgimi_control_bridge_osd_picture_mode
 ```
 
-Wichtig: Der alte direkte `select.xgimi_control_bridge_picture_mode` wird nicht
-mehr als Standard-Entity angelegt. Der XGIMI-Wrapper aendert den sichtbaren
-HDR10/IMAX-Bildmodus auf dem H20 nicht zuverlaessig.
-Der fruehere `select.*_native_pq_picture_mode` wurde ab `v0.1.12` entfernt,
-weil der native Rohwert `Picture_Mode` nicht dem sichtbaren OSD-Bildmodus
-entspricht. Der Wert bleibt als Diagnose-Sensor erhalten.
+Important: the old direct `select.xgimi_control_bridge_picture_mode` is no longer created by default – the XGIMI wrapper does not reliably change the visible HDR10/IMAX picture mode on the H20. The former `select.*_native_pq_picture_mode` was removed in `v0.1.12` because the native raw value `Picture_Mode` does not match the visible OSD picture mode; it remains as a diagnostic sensor.
 
-Ab `v0.1.11` nutzt die Integration zwei unterschiedliche native Schreibpfade:
-globale PQ-Werte wie `Gamma`, `Color_Temperature` und `Backlight` laufen ueber
-`setPqParamsByGlobal`; stream-/bildbezogene Werte wie `Brightness`, `Contrast`,
-`MJC_Effect`, `AI_PQ` und `Local_Contrast` laufen ueber `setPqParams(0, json)`.
+Since `v0.1.11` the integration uses two native write paths: global PQ values like `Gamma`, `Color_Temperature` and `Backlight` go through `setPqParamsByGlobal`; stream/picture values like `Brightness`, `Contrast`, `MJC_Effect`, `AI_PQ` and `Local_Contrast` go through `setPqParams(0, json)`.
 
-Zusaetzlich gibt es Status-Sensoren und Buttons zum manuellen Aktualisieren:
+Status sensors and refresh buttons:
 
 ```text
 button.xgimi_control_bridge_refresh_all_status
@@ -296,13 +252,9 @@ sensor.xgimi_control_bridge_last_command_ok
 sensor.xgimi_control_bridge_last_adb_response
 ```
 
-Der Status wird aus dem `adb_response`-Attribut der Android-TV-ADB-Entity gelesen.
-Wenn Steuerung oder Status nicht funktionieren, zuerst den Button
-**Refresh All Status** druecken und danach die nativen Sensoren pruefen.
-Der Roh-ADB-Sensor wird absichtlich gekuerzt, damit Home Assistant keine zu grossen
-Recorder-Attribute speichert.
+Status is read from the `adb_response` attribute of the Android TV ADB entity. If control or status doesn't work, press **Refresh All Status** first and then check the native sensors. The raw ADB sensor is truncated on purpose so Home Assistant doesn't store oversized recorder attributes.
 
-Außerdem stehen Services zur Verfügung:
+### Services
 
 ```text
 xgimi_control_bridge.set_picture_mode
@@ -322,20 +274,19 @@ xgimi_control_bridge.osd_confirm
 xgimi_control_bridge.osd_back
 ```
 
-Empfohlener OSD-Ablauf fuer den sichtbaren Bildmodus:
+Recommended OSD flow for the visible picture mode:
 
-1. Einmal den aktuellen Modus synchronisieren:
+1. Sync the current mode once:
 
 ```yaml
 action: xgimi_control_bridge.sync_osd_picture_mode
 target:
   entity_id: media_player.xgimi_h20
 data:
-  mode: Lebhaft
+  mode: Lebhaft   # German OSD name of the current mode
 ```
 
-2. Danach den Select `select.xgimi_control_bridge_osd_picture_mode` benutzen
-oder den Service direkt aufrufen:
+2. Then use `select.xgimi_control_bridge_osd_picture_mode` or call the service directly:
 
 ```yaml
 action: xgimi_control_bridge.set_osd_picture_mode
@@ -345,12 +296,9 @@ data:
   mode: Film
 ```
 
-Die Integration oeffnet dabei das originale Picture-Mode-OSD, drueckt die
-kuerzeste Links-/Rechts-Sequenz und schliesst das OSD wieder. Wenn du mit der
-Fernbedienung manuell umstellst, danach wieder `sync_osd_picture_mode`
-aufrufen, damit HA und Beamer dieselbe Ausgangsposition kennen.
+The integration opens the original picture-mode OSD, presses the shortest left/right sequence and closes the OSD again. If you change the mode with the remote, call `sync_osd_picture_mode` again so HA and the projector share the same starting point.
 
-Autofokus:
+Autofocus:
 
 ```yaml
 action: xgimi_control_bridge.autofocus
@@ -358,7 +306,7 @@ target:
   entity_id: media_player.xgimi_h20
 ```
 
-Nativer MediaTek-PQ-Status:
+Native MediaTek PQ status:
 
 ```yaml
 action: xgimi_control_bridge.get_native_pq_status
@@ -366,7 +314,7 @@ target:
   entity_id: media_player.xgimi_h20
 ```
 
-Nativer MediaTek-PQ-Schreibzugriff, live bestätigt mit Backlight 40 -> 41 -> 40:
+Native MediaTek PQ write access, confirmed live with backlight 40 → 41 → 40:
 
 ```yaml
 action: xgimi_control_bridge.set_native_pq_value
@@ -377,47 +325,13 @@ data:
   value: 40
 ```
 
-OSD-nahe ExtService-PQ-Schicht:
+OSD-level ExtService PQ layer:
 
 ```yaml
 action: xgimi_control_bridge.get_ext_pq_status
 target:
   entity_id: media_player.xgimi_h20
 ```
-
-### XGIMI Middleware Diagnose
-
-Ab Bridge-APK `0.1.9` kann der erreichbare XGIMI-MiscKey-Middleware-Service
-diagnostisch abgefragt werden:
-
-```bash
-scripts/xgimi_h20_adb.py -s 192.168.0.223:5555 \
-  bridge-middleware-exec-sync getBoostEnable
-```
-
-Bestaetigt erreichbar sind zum Beispiel `getBoostEnable` und `getALOnOff`.
-Die naheliegenden Picture-Mode-Kommandos `getPQMode`, `queryPQMode`,
-`getPictureMode` und `getImageMode` liefern derzeit leer zurueck; der sichtbare
-Bildmodus ist also auch ueber diesen oeffentlichen Middleware-Eingang noch nicht
-freigelegt.
-
-### Native MediaTek PQ Diagnose
-
-Ab `v0.1.15` gibt es zusaetzlich ein natives `armeabi-v7a` Shell-Werkzeug fuer
-den MediaTek-PQ-Binder. Es laeuft per ADB-Shell und umgeht damit die
-Beschraenkung, die normale sideloaded APKs bei `IPq.setMode` trifft:
-
-```bash
-native/build_xgimi_pq_tool.sh
-scripts/xgimi_h20_adb.py -s 192.168.0.223:5555 native-pq-tool-push
-scripts/xgimi_h20_adb.py -s 192.168.0.223:5555 native-pq-get-hdr-type --pq-id 0
-scripts/xgimi_h20_adb.py -s 192.168.0.223:5555 native-pq-set-mode --display-mode-type 30
-```
-
-Live bestaetigt: `native-pq-get-hdr-type` liest den Vendor-Binder erfolgreich.
-`native-pq-set-mode` erreicht Returncodes, hat den sichtbaren HDR10-Bildmodus
-aber noch nicht geloest. Der naechste Schritt ist das Rekonstruieren der echten
-Runtime-Werte fuer `DisplayModeSettingData`.
 
 MEMC:
 
@@ -429,8 +343,7 @@ data:
   level: high
 ```
 
-Die Integration nutzt intern weiterhin die Android-TV-ADB-Aktion. Der äquivalente
-Rohbefehl wäre:
+The integration internally still uses the Android TV ADB action. The equivalent raw command:
 
 ```yaml
 action: androidtv.adb_command
@@ -443,5 +356,32 @@ data:
     --es mode movie
 ```
 
-Hinweis: Das ist eine experimentelle Bridge gegen eine nicht dokumentierte Hersteller-API.
-Nach Firmware-Updates können Methodennamen oder Berechtigungen geändert sein.
+### XGIMI middleware diagnostics
+
+From bridge APK `0.1.9` the reachable XGIMI MiscKey middleware service can be queried for diagnostics:
+
+```bash
+scripts/xgimi_h20_adb.py -s <BEAMER-IP>:5555 \
+  bridge-middleware-exec-sync getBoostEnable
+```
+
+Confirmed reachable are e.g. `getBoostEnable` and `getALOnOff`. The obvious picture-mode commands `getPQMode`, `queryPQMode`, `getPictureMode` and `getImageMode` currently return empty – the visible picture mode is not exposed through this public middleware entry either.
+
+### Native MediaTek PQ diagnostics
+
+From `v0.1.15` there is also a native `armeabi-v7a` shell tool for the MediaTek PQ binder. It runs via the ADB shell and thereby avoids the restriction normal sideloaded APKs hit with `IPq.setMode`:
+
+```bash
+native/build_xgimi_pq_tool.sh
+scripts/xgimi_h20_adb.py -s <BEAMER-IP>:5555 native-pq-tool-push
+scripts/xgimi_h20_adb.py -s <BEAMER-IP>:5555 native-pq-get-hdr-type --pq-id 0
+scripts/xgimi_h20_adb.py -s <BEAMER-IP>:5555 native-pq-set-mode --display-mode-type 30
+```
+
+Confirmed live: `native-pq-get-hdr-type` reads the vendor binder successfully. `native-pq-set-mode` gets return codes but hasn't solved the visible HDR10 picture mode yet. The next step is reconstructing the real runtime values for `DisplayModeSettingData`.
+
+> This is an experimental bridge against an undocumented vendor API. Method names or permissions may change after firmware updates.
+
+## License
+
+See [LICENSE](LICENSE). Not affiliated with XGIMI.
